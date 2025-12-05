@@ -4,23 +4,28 @@ import Header from "../components/Header";
 import Hero from "../components/Hero";
 import FilterTabs from "../components/FilterTabs";
 import StudioCard from "../components/StudioCard";
+import ConfirmationModal from "../components/ConfirmationModal";
 import { studios } from "../utils/mockData";
 import { getCurrentUser, logoutUser } from "../utils/auth";
 
 const HomePage = () => {
   const [activeFilter, setActiveFilter] = useState("all");
   const [currentUser, setCurrentUser] = useState(null);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     setCurrentUser(getCurrentUser());
   }, []);
 
-  const handleLogout = () => {
-    if (window.confirm("Bạn có chắc muốn đăng xuất?")) {
-      logoutUser();
-      setCurrentUser(null);
-      window.location.reload();
-    }
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true);
+  };
+
+  const handleLogoutConfirm = () => {
+    logoutUser();
+    setCurrentUser(null);
+    // ✅ Redirect to home page after logout
+    window.location.href = "/";
   };
 
   const handleLoginSuccess = (user) => {
@@ -42,7 +47,19 @@ const HomePage = () => {
       <Header 
         currentUser={currentUser}
         onLoginSuccess={handleLoginSuccess}
-        onLogout={handleLogout}
+        onLogout={handleLogoutClick}
+      />
+      
+      {/* Logout Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleLogoutConfirm}
+        title="Xác nhận đăng xuất"
+        message="Bạn có chắc muốn đăng xuất?"
+        confirmText="Đăng xuất"
+        cancelText="Hủy"
+        type="warning"
       />
       <Hero />
       <FilterTabs activeFilter={activeFilter} onFilterChange={setActiveFilter} />

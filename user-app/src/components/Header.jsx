@@ -34,7 +34,9 @@ const Header = ({ currentUser, onLoginSuccess, onLogout }) => {
   };
 
   const handleCreatePostSuccess = () => {
-    alert("Bài viết của bạn đang chờ duyệt!");
+    // Toast notification will be shown in CreatePostModal
+    // Dispatch event to refresh posts in PostsPage
+    window.dispatchEvent(new Event('postCreated'));
   };
 
   // Đóng dropdown khi click bên ngoài
@@ -83,6 +85,11 @@ const Header = ({ currentUser, onLoginSuccess, onLogout }) => {
     setIsDropdownOpen(false);
     if (onLogout) {
       onLogout();
+    } else {
+      // ✅ Fallback: logout và redirect nếu không có onLogout prop
+      const { logoutUser } = require("../utils/auth");
+      logoutUser();
+      window.location.href = "/";
     }
   };
 

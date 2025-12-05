@@ -3,12 +3,14 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { logoutUser } from "../utils/auth";
 import { getAllNotifications, markNotificationAsRead, formatTimeAgo, getUnreadCount } from "../utils/notifications";
+import ConfirmationModal from "../components/ConfirmationModal";
 
 const AdminHeader = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const notificationRef = useRef(null);
 
   useEffect(() => {
@@ -42,11 +44,16 @@ const AdminHeader = () => {
     };
   }, [showNotifications]);
 
-  const handleLogout = () => {
-    if (window.confirm("Bạn có chắc muốn đăng xuất?")) {
-      logoutUser();
-      window.location.href = "/";
-    }
+  const handleLogoutClick = () => {
+    setShowUserMenu(false);
+    setShowLogoutModal(true);
+  };
+
+  const handleLogoutConfirm = () => {
+    logoutUser();
+    // ✅ Redirect to home page after logout
+    window.location.href = "/";
+    window.location.href = "/";
   };
 
   const handleNotificationClick = (notification) => {
@@ -151,7 +158,7 @@ const AdminHeader = () => {
               </button>
               <div className="border-t border-gray-200 my-2"></div>
               <button
-                onClick={handleLogout}
+                onClick={handleLogoutClick}
                 className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
               >
                 Đăng xuất
@@ -160,6 +167,18 @@ const AdminHeader = () => {
           )}
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleLogoutConfirm}
+        title="Xác nhận đăng xuất"
+        message="Bạn có chắc muốn đăng xuất?"
+        confirmText="Đăng xuất"
+        cancelText="Hủy"
+        type="warning"
+      />
     </header>
   );
 };

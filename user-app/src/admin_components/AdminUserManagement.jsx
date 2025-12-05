@@ -3,6 +3,8 @@ import React, { useState, useEffect } from "react";
 import { getAllUsers, toggleUserStatus, toggleAccountType, deleteUser } from "../utils/auth";
 import UserDetailModal from "./UserDetailModal";
 import AddUserModal from "./AddUserModal";
+import ConfirmationModal from "../components/ConfirmationModal";
+import { showSuccess, showError } from "../utils/toast";
 
 const AdminUserManagement = () => {
   const [users, setUsers] = useState([]);
@@ -12,6 +14,14 @@ const AdminUserManagement = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    type: null, // 'toggleStatus', 'toggleAccountType', 'delete'
+    userId: null,
+    userName: null,
+  });
 
   useEffect(() => {
     loadUsers();
@@ -48,52 +58,82 @@ const AdminUserManagement = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const handleToggleStatus = async (userId) => {
-    if (!window.confirm("Bạn có chắc muốn thay đổi trạng thái tài khoản này?")) return;
+  const handleToggleStatus = (userId) => {
+    const user = users.find((u) => u.user_id === userId);
+    setConfirmModal({
+      isOpen: true,
+      type: 'toggleStatus',
+      userId,
+      userName: user?.name || 'N/A',
+    });
+  };
 
+  const confirmToggleStatus = async () => {
+    const { userId } = confirmModal;
     try {
       const result = await toggleUserStatus(userId);
       if (result.success) {
-        alert("✅ Đã cập nhật trạng thái!");
+        showSuccess("Đã cập nhật trạng thái!");
         loadUsers();
       } else {
-        alert("❌ " + (result.message || "Không thể cập nhật"));
+        showError(result.message || "Không thể cập nhật");
       }
     } catch (error) {
-      alert("❌ Lỗi: " + error.message);
+      showError("Lỗi: " + error.message);
     }
+    setConfirmModal({ isOpen: false, type: null, userId: null, userName: null });
   };
 
-  const handleToggleAccountType = async (userId) => {
-    if (!window.confirm("Bạn có chắc muốn thay đổi loại tài khoản?")) return;
+  const handleToggleAccountType = (userId) => {
+    const user = users.find((u) => u.user_id === userId);
+    setConfirmModal({
+      isOpen: true,
+      type: 'toggleAccountType',
+      userId,
+      userName: user?.name || 'N/A',
+    });
+  };
 
+  const confirmToggleAccountType = async () => {
+    const { userId } = confirmModal;
     try {
       const result = await toggleAccountType(userId);
       if (result.success) {
-        alert("✅ Đã cập nhật loại tài khoản!");
+        showSuccess("Đã cập nhật loại tài khoản!");
         loadUsers();
       } else {
-        alert("❌ " + (result.message || "Không thể cập nhật"));
+        showError(result.message || "Không thể cập nhật");
       }
     } catch (error) {
-      alert("❌ Lỗi: " + error.message);
+      showError("Lỗi: " + error.message);
     }
+    setConfirmModal({ isOpen: false, type: null, userId: null, userName: null });
   };
 
-  const handleDeleteUser = async (userId) => {
-    if (!window.confirm("⚠️ XÓA VĨNH VIỄN tài khoản này? Không thể khôi phục!")) return;
+  const handleDeleteUser = (userId) => {
+    const user = users.find((u) => u.user_id === userId);
+    setConfirmModal({
+      isOpen: true,
+      type: 'delete',
+      userId,
+      userName: user?.name || 'N/A',
+    });
+  };
 
+  const confirmDeleteUser = async () => {
+    const { userId } = confirmModal;
     try {
       const result = await deleteUser(userId);
       if (result.success) {
-        alert("✅ Đã xóa tài khoản!");
+        showSuccess("Đã xóa tài khoản!");
         loadUsers();
       } else {
-        alert("❌ " + (result.message || "Không thể xóa"));
+        showError(result.message || "Không thể xóa");
       }
     } catch (error) {
-      alert("❌ Lỗi: " + error.message);
+      showError("Lỗi: " + error.message);
     }
+    setConfirmModal({ isOpen: false, type: null, userId: null, userName: null });
   };
 
   const handleViewDetail = (user) => {
@@ -311,6 +351,39 @@ const AdminUserManagement = () => {
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSuccess={handleAddSuccess}
+      />
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ isOpen: false, type: null, userId: null, userName: null })}
+        onConfirm={() => {
+          if (confirmModal.type === 'toggleStatus') {
+            confirmToggleStatus();
+          } else if (confirmModal.type === 'toggleAccountType') {
+            confirmToggleAccountType();
+          } else if (confirmModal.type === 'delete') {
+            confirmDeleteUser();
+          }
+        }}
+        title={
+          confirmModal.type === 'toggleStatus' ? 'Thay đổi trạng thái tài khoản' :
+          confirmModal.type === 'toggleAccountType' ? 'Thay đổi loại tài khoản' :
+          'Xóa tài khoản'
+        }
+        message={
+          confirmModal.type === 'toggleStatus' ? `Bạn có chắc muốn thay đổi trạng thái tài khoản "${confirmModal.userName}"?` :
+          confirmModal.type === 'toggleAccountType' ? `Bạn có chắc muốn thay đổi loại tài khoản "${confirmModal.userName}"?` :
+          `⚠️ XÓA VĨNH VIỄN tài khoản "${confirmModal.userName}"? Hành động này không thể khôi phục!`
+        }
+        confirmText={
+          confirmModal.type === 'toggleStatus' ? 'Xác nhận' :
+          confirmModal.type === 'toggleAccountType' ? 'Xác nhận' :
+          'Xóa'
+        }
+        type={
+          confirmModal.type === 'delete' ? 'danger' : 'warning'
+        }
       />
     </div>
   );

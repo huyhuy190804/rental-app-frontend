@@ -1,5 +1,6 @@
 // wrstudios-frontend/user-app/src/page/PostsPage.jsx
 import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import PostCard from "../components/PostCard";
 import PostDetailModal from "../components/PostDetailModal";
@@ -15,6 +16,7 @@ const priceRanges = [
 ];
 
 const PostsPage = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("all");
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,16 +45,30 @@ const PostsPage = () => {
     loadPosts();
   }, [activeTab, selectedPriceRange]);
 
+  // ✅ Listen for post creation event to refresh posts
+  useEffect(() => {
+    const handlePostCreated = () => {
+      // Refresh posts after a new post is created
+      loadPosts();
+    };
+
+    window.addEventListener('postCreated', handlePostCreated);
+    return () => window.removeEventListener('postCreated', handlePostCreated);
+  }, []);
+
   const loadPosts = () => {
     setLoading(true);
     setTimeout(() => {
       (async () => {
         try {
-          const all = await getAllPosts();
+          console.log('🔄 Loading posts...');
+          const all = await getAllPosts(1, 1000); // Get more posts
+          console.log('📦 Received posts:', all?.length || 0);
 
           // Map backend fields to frontend fields
           const mappedPosts = (all || []).map((p) => ({
             ...p,
+            id: p.post_id || p.id, // Ensure id is set
             type: p.post_type || "listing", // Map post_type to type
             createdAt: p.created_at || p.createdAt,
             authorName: p.author_name || p.authorName || "Unknown",
@@ -60,11 +76,15 @@ const PostsPage = () => {
             location: p.address || p.location,
             content: p.description, // For articles, content is in description
             images: p.images || [],
+            thumbnail: p.thumbnail || null, // Ensure thumbnail is mapped from backend
           }));
 
+          console.log('✅ Mapped posts:', mappedPosts.length);
           const approved = mappedPosts
             .filter((p) => p.status === "approved")
             .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          
+          console.log('✅ Approved posts:', approved.length);
 
           setAllApprovedPosts(approved);
 
@@ -122,6 +142,8 @@ const PostsPage = () => {
   const handleLogout = () => {
     logoutUser();
     setCurrentUser(null);
+    // ✅ Redirect to home page after logout
+    navigate("/");
   };
 
   const tabs = [

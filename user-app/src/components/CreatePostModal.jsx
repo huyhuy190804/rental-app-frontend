@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { getCurrentUser } from "../utils/auth";
 import { createPost } from "../utils/posts";
+import { showSuccess, showWarning, showError } from "../utils/toast";
 
 const CreatePostModal = ({ isOpen, onClose, onSuccess }) => {
   const [activeTab, setActiveTab] = useState("sale"); // "sale" or "article"
@@ -30,7 +31,7 @@ const CreatePostModal = ({ isOpen, onClose, onSuccess }) => {
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
     if (files.length + formData.images.length > 20) {
-      alert("Tối đa 20 ảnh!");
+      showWarning("Tối đa 20 ảnh!");
       return;
     }
 
@@ -123,8 +124,11 @@ const CreatePostModal = ({ isOpen, onClose, onSuccess }) => {
       const result = await createPost(postData);
 
       if (result.success) {
-        alert("✅ Đăng bài thành công! Bài viết được lưu vào database.");
+        showSuccess("Đăng bài thành công!");
         onSuccess();
+        // ✅ Dispatch event to refresh membership status
+        window.dispatchEvent(new Event("postCreated"));
+        window.dispatchEvent(new Event("membershipChanged"));
         handleClose();
       } else {
         setError(result.message || "Lỗi khi đăng bài");

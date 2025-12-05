@@ -5,8 +5,9 @@ import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import PremiumIcon from "../components/PremiumIcon";
 import { getCurrentUser, logoutUser } from "../utils/auth";
-import { membershipAPI } from "../utils/api";
+import { membershipAPI, usersAPI } from "../utils/api";
 import { formatCurrency } from "../utils/format";
+import { showError, showWarning, showInfo } from "../utils/toast";
 
 const PremiumPage = () => {
   const navigate = useNavigate();
@@ -14,22 +15,73 @@ const PremiumPage = () => {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const [userMembership, setUserMembership] = useState(null);
 
   useEffect(() => {
     const user = getCurrentUser();
     setCurrentUser(user);
     loadPlans();
+    if (user) {
+      loadUserMembership(user.user_id || user.id);
+    }
 
     const handleAuthChange = () => {
-      setCurrentUser(getCurrentUser());
+      const updatedUser = getCurrentUser();
+      setCurrentUser(updatedUser);
+      if (updatedUser) {
+        loadUserMembership(updatedUser.user_id || updatedUser.id);
+      } else {
+        setUserMembership(null);
+      }
+    };
+
+    // ✅ Listen for post created event to refresh membership
+    const handlePostCreated = () => {
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        loadUserMembership(currentUser.user_id || currentUser.id);
+      }
+    };
+
+    // ✅ Listen for membership changed event
+    const handleMembershipChanged = () => {
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        loadUserMembership(currentUser.user_id || currentUser.id);
+      }
     };
 
     window.addEventListener("authChange", handleAuthChange);
+    window.addEventListener("postCreated", handlePostCreated);
+    window.addEventListener("membershipChanged", handleMembershipChanged);
 
     return () => {
       window.removeEventListener("authChange", handleAuthChange);
+      window.removeEventListener("postCreated", handlePostCreated);
+      window.removeEventListener("membershipChanged", handleMembershipChanged);
     };
   }, []);
+
+  const loadUserMembership = async (userId) => {
+    try {
+      const result = await usersAPI.getMembership(userId);
+      if (result.success && result.data.hasActiveMembership) {
+        setUserMembership(result.data);
+        
+        // Check if membership is expiring soon (within 7 days)
+        if (result.data.membership.daysRemaining <= 7 && result.data.membership.daysRemaining > 0) {
+          showInfo(`Gói Premium của bạn sẽ hết hạn sau ${result.data.membership.daysRemaining} ngày. Vui lòng gia hạn!`);
+        } else if (result.data.membership.daysRemaining <= 0) {
+          showWarning("Gói Premium của bạn đã hết hạn. Vui lòng gia hạn để tiếp tục sử dụng!");
+        }
+      } else {
+        setUserMembership(null);
+      }
+    } catch (error) {
+      console.error("Error loading user membership:", error);
+      setUserMembership(null);
+    }
+  };
 
   const loadPlans = async () => {
     try {
@@ -57,17 +109,20 @@ const PremiumPage = () => {
   const handleLogout = () => {
     logoutUser();
     setCurrentUser(null);
+    setUserMembership(null);
+    // ✅ Redirect to home page after logout
+    navigate("/");
   };
 
   const handleUpgrade = (planId) => {
     const plan = plans.find((p) => p.ms_id === planId);
     if (!plan) {
-      alert("Gói không tồn tại.");
+      showError("Gói không tồn tại.");
       return;
     }
 
     if (!currentUser) {
-      alert("Vui lòng đăng nhập để nâng cấp gói!");
+      showWarning("Vui lòng đăng nhập để nâng cấp gói!");
       return;
     }
 
@@ -235,19 +290,48 @@ const PremiumPage = () => {
 
                   <button
                     onClick={() => handleUpgrade(plan.ms_id)}
+                    disabled={
+                      userMembership?.hasActiveMembership && 
+                      userMembership.membership.package_name === plan.name && 
+                      !userMembership.canRenew
+                    }
                     className={`w-full py-3 rounded-lg font-semibold transition-all duration-200 ${
-                      plan.popular
+                      userMembership?.hasActiveMembership && 
+                      userMembership.membership.package_name === plan.name && 
+                      !userMembership.canRenew
+                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                        : plan.popular
                         ? `bg-gradient-to-r ${color.button} text-white shadow-lg hover:shadow-xl`
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
+                    title={
+                      userMembership?.hasActiveMembership && 
+                      userMembership.membership.package_name === plan.name && 
+                      !userMembership.canRenew
+                        ? "Bạn đã gia hạn trong tháng này. Vui lòng đợi đến tháng mới để gia hạn tiếp."
+                        : ""
+                    }
                   >
-                    {currentUser?.membershipTier &&
-                    currentUser.membershipTier !== "Free"
-                      ? `${currentUser.membershipTier} → ${getMembershipTier(
-                          plan.name
-                        )}`
+                    {userMembership?.hasActiveMembership && userMembership.membership.package_name === plan.name
+                      ? userMembership.canRenew
+                        ? `Gia hạn ${plan.name}`
+                        : `Đã gia hạn (tháng này)`
+                      : userMembership?.hasActiveMembership
+                      ? `${getMembershipTier(userMembership.membership.package_name)} → ${getMembershipTier(plan.name)}`
                       : `Nâng cấp ${plan.name}`}
                   </button>
+                  
+                  {/* Show current post usage */}
+                  {userMembership?.hasActiveMembership && userMembership.membership.package_name === plan.name && (
+                    <div className="mt-2 text-xs text-gray-500 text-center">
+                      Đã dùng: {userMembership.currentPostCount}/{userMembership.membership.post_limit} bài viết/tháng
+                      {userMembership.membership.daysRemaining > 0 && (
+                        <span className="block mt-1">
+                          Còn lại: {userMembership.membership.daysRemaining} ngày
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })

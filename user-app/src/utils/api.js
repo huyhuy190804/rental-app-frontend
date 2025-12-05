@@ -69,6 +69,13 @@ export const usersAPI = {
       headers: { ...getAuthHeader() }
     });
     return res.json();
+  },
+
+  getMembership: async (id) => {
+    const res = await fetch(`${API_BASE_URL}/users/${id}/membership`, {
+      headers: { ...getAuthHeader() }
+    });
+    return res.json();
   }
 };
 
@@ -115,7 +122,7 @@ export const postsAPI = {
 
   approve: async (id) => {
     const res = await fetch(`${API_BASE_URL}/posts/${id}/approve`, {
-      method: 'PUT',
+      method: 'PATCH',
       headers: { ...getAuthHeader() }
     });
     return res.json();
@@ -123,7 +130,7 @@ export const postsAPI = {
 
   reject: async (id) => {
     const res = await fetch(`${API_BASE_URL}/posts/${id}/reject`, {
-      method: 'PUT',
+      method: 'PATCH',
       headers: { ...getAuthHeader() }
     });
     return res.json();

@@ -2,7 +2,7 @@
 import { postsAPI } from "./api";
 
 // Lấy tất cả bài viết từ backend
-export const getAllPosts = async (page = 1, limit = 10) => {
+export const getAllPosts = async (page = 1, limit = 1000) => {
   try {
     const result = await postsAPI.getAll(page, limit);
     if (result.success) {
@@ -152,13 +152,18 @@ export const addComment = async (
 // Lấy comments của bài viết
 export const getComments = async (postId) => {
   try {
+    console.log('🔄 Loading comments for post:', postId);
     const { commentsAPI } = await import("./api");
     const result = await commentsAPI.getByPostId(postId);
+    console.log('📦 Comments result:', result);
     if (result.success) {
+      console.log(`✅ Loaded ${result.data?.length || 0} comments`);
       return result.data || [];
     }
+    console.warn('⚠️ Failed to load comments:', result);
     return [];
   } catch (error) {
+    console.error('❌ Error loading comments:', error);
     return [];
   }
 };

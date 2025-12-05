@@ -1,6 +1,7 @@
 //wrstudios-frontend/user-app/src/components/LoginModal.jsx
 import React, { useState } from "react";
 import { loginUser, loginAdmin } from "../utils/auth";
+import { showSuccess } from "../utils/toast";
 
 const LoginModal = ({
   isOpen,
@@ -39,7 +40,7 @@ const LoginModal = ({
       }
 
       if (result.success) {
-        alert("✅ " + result.message);
+        showSuccess(result.message);
         onLoginSuccess(result.user);
         onClose();
       } else {

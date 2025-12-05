@@ -8,9 +8,11 @@ import {
 } from "../utils/posts";
 import PostDetailModal from "../components/PostDetailModal";
 import CreatePostModal from "../components/CreatePostModal";
+import ConfirmationModal from "../components/ConfirmationModal";
 import { formatCurrency } from "../utils/format";
 import { getCurrentUser } from "../utils/auth";
 import { addNotification } from "../utils/notifications";
+import { showSuccess, showError, showWarning, showInfo } from "../utils/toast";
 
 const AdminPostManagement = () => {
   const [activeTab, setActiveTab] = useState("all");
@@ -20,6 +22,14 @@ const AdminPostManagement = () => {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
+  
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    type: null, // 'approve', 'reject', 'delete'
+    postId: null,
+    postTitle: null,
+  });
 
   const loadPosts = useCallback(async () => {
     try {
@@ -40,7 +50,7 @@ const AdminPostManagement = () => {
       setCurrentPage(1);
     } catch (error) {
       console.error("Error loading posts:", error);
-      alert("Lỗi khi tải bài viết!");
+      showError("Lỗi khi tải bài viết!");
     }
   }, [activeTab]);
 
@@ -48,86 +58,111 @@ const AdminPostManagement = () => {
     loadPosts();
   }, [loadPosts]);
 
-  const handleApprove = async (postId) => {
-    if (window.confirm("Duyệt bài viết này?")) {
-      try {
-        const result = await approvePost(postId);
-        if (result.success) {
-          const post = posts.find(
-            (p) => p.post_id === postId
-          );
-          addNotification(
-            "post_approved",
-            `Bài viết "${post?.title || "N/A"}" đã được duyệt`,
-            { postId }
-          );
-          alert("✅ Đã duyệt bài viết!");
-          loadPosts();
-        } else {
-          alert("❌ " + (result.message || "Lỗi duyệt bài viết"));
-        }
-      } catch (error) {
-        alert("Lỗi duyệt bài viết: " + error.message);
-      }
-    }
+  const handleApprove = (postId) => {
+    const post = posts.find((p) => p.post_id === postId);
+    setConfirmModal({
+      isOpen: true,
+      type: 'approve',
+      postId,
+      postTitle: post?.title || 'N/A',
+    });
   };
 
-  const handleReject = async (postId) => {
-    if (window.confirm("Từ chối bài viết này?")) {
-      try {
-        const result = await rejectPost(postId);
-        if (result.success) {
-          const post = posts.find(
-            (p) => p.post_id === postId
-          );
-          addNotification(
-            "post_rejected",
-            `Bài viết "${post?.title || "N/A"}" đã bị từ chối`,
-            { postId }
-          );
-          alert("❌ Đã từ chối bài viết!");
-          loadPosts();
-        } else {
-          alert("❌ " + (result.message || "Lỗi từ chối bài viết"));
-        }
-      } catch (error) {
-        alert("Lỗi từ chối bài viết: " + error.message);
+  const confirmApprove = async () => {
+    const { postId } = confirmModal;
+    try {
+      const result = await approvePost(postId);
+      if (result.success) {
+        const post = posts.find((p) => p.post_id === postId);
+        addNotification(
+          "post_approved",
+          `Bài viết "${post?.title || "N/A"}" đã được duyệt`,
+          { postId }
+        );
+        showSuccess("Đã duyệt bài viết!");
+        loadPosts();
+      } else {
+        showError(result.message || "Lỗi duyệt bài viết");
       }
+    } catch (error) {
+      showError("Lỗi duyệt bài viết: " + error.message);
     }
+    setConfirmModal({ isOpen: false, type: null, postId: null, postTitle: null });
   };
 
-  const handleDelete = async (postId, postTitle) => {
-    if (window.confirm(`Xóa bài viết "${postTitle}"?`)) {
-      try {
-        const result = await deletePost(postId);
-        if (result.success) {
-          alert("🗑️ Đã xóa bài viết!");
+  const handleReject = (postId) => {
+    const post = posts.find((p) => p.post_id === postId);
+    setConfirmModal({
+      isOpen: true,
+      type: 'reject',
+      postId,
+      postTitle: post?.title || 'N/A',
+    });
+  };
+
+  const confirmReject = async () => {
+    const { postId } = confirmModal;
+    try {
+      const result = await rejectPost(postId);
+      if (result.success) {
+        const post = posts.find((p) => p.post_id === postId);
+        addNotification(
+          "post_rejected",
+          `Bài viết "${post?.title || "N/A"}" đã bị từ chối`,
+          { postId }
+        );
+        showSuccess("Đã từ chối bài viết!");
+        loadPosts();
+      } else {
+        showError(result.message || "Lỗi từ chối bài viết");
+      }
+    } catch (error) {
+      showError("Lỗi từ chối bài viết: " + error.message);
+    }
+    setConfirmModal({ isOpen: false, type: null, postId: null, postTitle: null });
+  };
+
+  const handleDelete = (postId, postTitle) => {
+    setConfirmModal({
+      isOpen: true,
+      type: 'delete',
+      postId,
+      postTitle,
+    });
+  };
+
+  const confirmDelete = async () => {
+    const { postId, postTitle } = confirmModal;
+    try {
+      const result = await deletePost(postId);
+      if (result.success) {
+        showSuccess("Đã xóa bài viết!");
+        setPosts((currentPosts) =>
+          currentPosts.filter((p) => p.post_id !== postId)
+        );
+      } else {
+        // Nếu bài viết không tồn tại trong database, vẫn xóa khỏi state
+        if (result.message && result.message.includes('not found')) {
+          showWarning("Bài viết không tồn tại trong database, đang xóa khỏi danh sách hiển thị...");
           setPosts((currentPosts) =>
             currentPosts.filter((p) => p.post_id !== postId)
           );
         } else {
-          // Nếu bài viết không tồn tại trong database, vẫn xóa khỏi state
-          if (result.message && result.message.includes('not found')) {
-            alert("⚠️ Bài viết không tồn tại trong database, đang xóa khỏi danh sách hiển thị...");
-            setPosts((currentPosts) =>
-              currentPosts.filter((p) => p.post_id !== postId)
-            );
-          } else {
-            alert("❌ " + (result.message || "Lỗi xóa bài viết"));
-          }
-        }
-      } catch (error) {
-        // Nếu có lỗi do bài viết không tồn tại, vẫn xóa khỏi state
-        if (error.message && error.message.includes('404')) {
-          alert("⚠️ Bài viết không tồn tại trong database, đang xóa khỏi danh sách hiển thị...");
-          setPosts((currentPosts) =>
-            currentPosts.filter((p) => p.post_id !== postId)
-          );
-        } else {
-          alert("Lỗi xóa bài viết: " + error.message);
+          showError(result.message || "Lỗi xóa bài viết");
         }
       }
+    } catch (error) {
+      // Nếu có lỗi do bài viết không tồn tại, vẫn xóa khỏi state
+      if (error.message && error.message.includes('404')) {
+        showWarning("Bài viết không tồn tại trong database, đang xóa khỏi danh sách hiển thị...");
+        setPosts((currentPosts) =>
+          currentPosts.filter((p) => p.post_id !== postId)
+        );
+      } else {
+        showError("Lỗi xóa bài viết: " + error.message);
+      }
     }
+    setConfirmModal({ isOpen: false, type: null, postId: null, postTitle: null });
   };
 
   // Pagination
@@ -171,7 +206,7 @@ const AdminPostManagement = () => {
 
   const handleCreatePostSuccess = () => {
     addNotification("post_new", "Bài viết mới đã được tạo và đang chờ duyệt");
-    alert("✅ Bài viết đã được tạo thành công!");
+    showSuccess("Bài viết đã được tạo thành công!");
     loadPosts();
     setShowCreateModal(false);
   };
@@ -201,7 +236,7 @@ const AdminPostManagement = () => {
           onClick={() => {
             const currentUser = getCurrentUser();
             if (!currentUser) {
-              alert("Vui lòng đăng nhập để thêm bài viết!");
+              showWarning("Vui lòng đăng nhập để thêm bài viết!");
               return;
             }
             setShowCreateModal(true);
@@ -239,6 +274,41 @@ const AdminPostManagement = () => {
           loadPosts();
         }}
         postId={selectedPost?.post_id}
+      />
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ isOpen: false, type: null, postId: null, postTitle: null })}
+        onConfirm={() => {
+          if (confirmModal.type === 'approve') {
+            confirmApprove();
+          } else if (confirmModal.type === 'reject') {
+            confirmReject();
+          } else if (confirmModal.type === 'delete') {
+            confirmDelete();
+          }
+        }}
+        title={
+          confirmModal.type === 'approve' ? 'Duyệt bài viết' :
+          confirmModal.type === 'reject' ? 'Từ chối bài viết' :
+          'Xóa bài viết'
+        }
+        message={
+          confirmModal.type === 'approve' ? `Bạn có chắc muốn duyệt bài viết "${confirmModal.postTitle}"?` :
+          confirmModal.type === 'reject' ? `Bạn có chắc muốn từ chối bài viết "${confirmModal.postTitle}"?` :
+          `Bạn có chắc muốn xóa bài viết "${confirmModal.postTitle}"? Hành động này không thể hoàn tác!`
+        }
+        confirmText={
+          confirmModal.type === 'approve' ? 'Duyệt' :
+          confirmModal.type === 'reject' ? 'Từ chối' :
+          'Xóa'
+        }
+        type={
+          confirmModal.type === 'delete' ? 'danger' :
+          confirmModal.type === 'reject' ? 'warning' :
+          'info'
+        }
       />
       {/* Tabs */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">

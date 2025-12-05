@@ -5,6 +5,7 @@ import { getCurrentUser } from "../utils/auth";
 import { toggleLikePost, ratePost, getUserRating, getComments } from "../utils/posts";
 import CommentModal from "./CommentModal";
 import { formatCurrency } from "../utils/format";
+import { showWarning } from "../utils/toast";
 
 const PostDetailCard = ({ post }) => {
   const currentUser = getCurrentUser();
@@ -20,7 +21,7 @@ const PostDetailCard = ({ post }) => {
     loadPostData();
   }, [post.id]);
 
-  const loadPostData = () => {
+  const loadPostData = async () => {
     // Load likes
     if (post.likes && currentUser) {
       setLiked(post.likes.includes(currentUser.id));
@@ -37,13 +38,14 @@ const PostDetailCard = ({ post }) => {
     setAverageRating(post.averageRating || 0);
     setTotalRatings(post.ratings ? post.ratings.length : 0);
 
-    // Load comments
-    setComments(getComments(post.id));
+    // Load comments - FIX: await async function
+    const commentsData = await getComments(post.id);
+    setComments(commentsData || []);
   };
 
   const handleLike = () => {
     if (!currentUser) {
-      alert("Vui lòng đăng nhập để like bài viết!");
+      showWarning("Vui lòng đăng nhập để like bài viết!");
       return;
     }
 
@@ -56,7 +58,7 @@ const PostDetailCard = ({ post }) => {
 
   const handleRate = (rating) => {
     if (!currentUser) {
-      alert("Vui lòng đăng nhập để đánh giá!");
+      showWarning("Vui lòng đăng nhập để đánh giá!");
       return;
     }
 
@@ -82,11 +84,17 @@ const PostDetailCard = ({ post }) => {
       <div className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200">
         <div className="flex flex-col md:flex-row">
           {/* Left: Image */}
-          <div className="md:w-2/5 relative">
+          <div className="md:w-2/5 relative bg-gray-100">
             <img
-              src={post.images[0] || "https://via.placeholder.com/600x400"}
+              src={post.images?.[0] || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='400'%3E%3Crect fill='%23f3f4f6' width='600' height='400'/%3E%3Ctext fill='%239ca3af' font-family='sans-serif' font-size='18' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"}
               alt={post.title}
               className="w-full h-64 md:h-full object-cover"
+              onError={(e) => {
+                // Prevent infinite loop by checking if already set to fallback
+                if (!e.target.src.includes('data:image')) {
+                  e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='400'%3E%3Crect fill='%23f3f4f6' width='600' height='400'/%3E%3Ctext fill='%239ca3af' font-family='sans-serif' font-size='18' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E";
+                }
+              }}
             />
             {/* Badge */}
             <div className="absolute top-4 left-4">

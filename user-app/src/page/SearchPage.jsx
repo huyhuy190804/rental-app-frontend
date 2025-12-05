@@ -98,6 +98,8 @@ const SearchPage = () => {
   const handleLogout = () => {
     logoutUser();
     setCurrentUser(null);
+    // ✅ Redirect to home page after logout
+    navigate("/");
   };
 
   return (

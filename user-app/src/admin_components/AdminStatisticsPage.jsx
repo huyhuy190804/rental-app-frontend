@@ -5,6 +5,7 @@
     exportToPDF,
     exportToExcel,
   } from "../utils/exportReports";
+  import { showError } from "../utils/toast";
   import {
     getStatistics,
     getMonthlyBreakdown,
@@ -107,7 +108,7 @@
         setShowExportModal(false);
       } catch (err) {
         console.error(err);
-        alert("Lỗi khi xuất file");
+        showError("Lỗi khi xuất file");
       }
     };
 

@@ -4,10 +4,9 @@ import AdminHeader from "./AdminHeader";
 import AdminNavBar from "./AdminNavBar";
 import PremiumIcon from "../components/PremiumIcon";
 import { getPlans, addPlan, updatePlan, deletePlan } from "../utils/plans";
-import { membershipAPI } from "../utils/api";
+import { membershipAPI, transactionsAPI } from "../utils/api";
 import { formatCurrency } from "../utils/format";
-// --- THÊM IMPORT NÀY ---
-import { getTransactions, updateTransactionStatus } from "../utils/transactions";
+import { showSuccess, showError } from "../utils/toast";
 
 const emptyPlanTemplate = {
   name: "",
@@ -17,6 +16,7 @@ const emptyPlanTemplate = {
   post_limit: 10,
   iconBg: "bg-pink-500",
   popular: false,
+  features: [], // ✅ FIX: Add features array to prevent undefined error
 };
 
 const AdminPremiumPage = () => {
@@ -60,6 +60,7 @@ const AdminPremiumPage = () => {
           post_limit: p.post_limit,
           iconBg: "bg-pink-500",
           popular: false,
+          features: p.features || [], // ✅ FIX: Ensure features is always an array
         }));
         setPlans(mapped);
       } else {
@@ -71,8 +72,14 @@ const AdminPremiumPage = () => {
       setPlans(getPlans());
     }
 
-    // transactions (legacy)
-    setTransactions(getTransactions());
+    // Load transactions from backend
+    try {
+      const transactionsData = await transactionsAPI.getAll();
+      setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
+    } catch (err) {
+      console.error("Error loading transactions:", err);
+      setTransactions([]);
+    }
   };
 
   const loadPlans = () => { // kept for compatibility
@@ -80,14 +87,21 @@ const AdminPremiumPage = () => {
   };
 
   // --- LOGIC XỬ LÝ DUYỆT ĐƠN ---
-  const handleTransactionAction = (id, status) => {
+  const handleTransactionAction = async (id, status) => {
     const actionName = status === "approved" ? "Duyệt" : "Từ chối";
     if (!window.confirm(`Xác nhận ${actionName} yêu cầu này?`)) return;
 
-    const res = updateTransactionStatus(id, status);
-    if (res.success) {
-      alert(`✅ Đã ${actionName} thành công!`);
-      loadData();
+    try {
+      const res = await transactionsAPI.updateStatus(id, status);
+      if (res.success) {
+        showSuccess(`Đã ${actionName} thành công!`);
+        loadData();
+      } else {
+        showError(res.error || `Không thể ${actionName.toLowerCase()} giao dịch`);
+      }
+    } catch (error) {
+      console.error("Error updating transaction:", error);
+      showError("Lỗi kết nối server. Vui lòng thử lại!");
     }
   };
 
@@ -106,6 +120,7 @@ const AdminPremiumPage = () => {
       post_limit: plan.post_limit || 10,
       iconBg: plan.iconBg || "bg-pink-500",
       popular: !!plan.popular,
+      features: Array.isArray(plan.features) ? plan.features : [], // ✅ FIX: Ensure features is always an array
     });
     setError(""); setIsModalOpen(true);
   };
@@ -116,22 +131,33 @@ const AdminPremiumPage = () => {
       // If plan came from backend it has id = ms_id
       const res = await membershipAPI.delete(plan.id);
       if (res && res.success) {
-        alert("✅ Đã xóa gói."); loadData();
+        showSuccess("Đã xóa gói."); loadData();
       } else {
         // fallback to local delete
         const r2 = deletePlan(plan.id);
-        if (r2.success) { alert("✅ Đã xóa gói (local)."); loadData(); } else { alert("❌ Xóa thất bại: " + (res.message || r2.message || "Lỗi")); }
+        if (r2.success) { showSuccess("Đã xóa gói (local)."); loadData(); } else { showError("Xóa thất bại: " + (res.message || r2.message || "Lỗi")); }
       }
     } catch (err) {
-      alert("❌ Xóa thất bại: " + err.message);
+      showError("Xóa thất bại: " + err.message);
     }
   };
 
   const handleFeatureChange = (idx, value) => {
-    setForm((prev) => { const next = { ...prev }; next.features = prev.features.slice(); next.features[idx] = value; return next; });
+    setForm((prev) => { 
+      const next = { ...prev }; 
+      next.features = Array.isArray(prev.features) ? prev.features.slice() : []; // ✅ FIX: Ensure features is array
+      next.features[idx] = value; 
+      return next; 
+    });
   };
-  const addFeatureInput = () => setForm((prev) => ({ ...prev, features: [...prev.features, ""] }));
-  const removeFeatureInput = (idx) => setForm((prev) => ({ ...prev, features: prev.features.filter((_, i) => i !== idx) }));
+  const addFeatureInput = () => setForm((prev) => ({ 
+    ...prev, 
+    features: Array.isArray(prev.features) ? [...prev.features, ""] : [""] // ✅ FIX: Ensure features is array
+  }));
+  const removeFeatureInput = (idx) => setForm((prev) => ({ 
+    ...prev, 
+    features: Array.isArray(prev.features) ? prev.features.filter((_, i) => i !== idx) : [] // ✅ FIX: Ensure features is array
+  }));
   
   const parsePrice = (raw) => {
     if (raw === "" || raw === null || raw === undefined) return null;
@@ -159,10 +185,10 @@ const AdminPremiumPage = () => {
       try {
         if (editingPlan) {
           const res = await membershipAPI.update(editingPlan.id, payload);
-          if (res && res.success) { alert("✅ Cập nhật gói thành công."); setIsModalOpen(false); loadData(); } else { setError((res && res.message) || "Cập nhật thất bại."); }
+          if (res && res.success) { showSuccess("Cập nhật gói thành công."); setIsModalOpen(false); loadData(); } else { setError((res && res.message) || "Cập nhật thất bại."); }
         } else {
           const res = await membershipAPI.create(payload);
-          if (res && res.success) { alert("✅ Thêm gói thành công."); setIsModalOpen(false); loadData(); } else { setError((res && res.message) || "Thêm thất bại."); }
+          if (res && res.success) { showSuccess("Thêm gói thành công."); setIsModalOpen(false); loadData(); } else { setError((res && res.message) || "Thêm thất bại."); }
         }
       } catch (err) {
         setError(err.message || "Lỗi mạng");
@@ -171,7 +197,7 @@ const AdminPremiumPage = () => {
   };
 
   // Filter cho bảng giao dịch
-  const filteredTransactions = transactions.filter(t => filterStatus === "all" ? true : t.status === filterStatus);
+  const filteredTransactions = Array.isArray(transactions) ? transactions.filter(t => filterStatus === "all" ? true : t.status === filterStatus) : [];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -225,9 +251,13 @@ const AdminPremiumPage = () => {
                   <p className="text-gray-600 text-center mb-6 text-sm">{plan.description}</p>
                   <div className="text-center mb-6"><span className={`text-4xl font-bold bg-gradient-to-r ${color.price} bg-clip-text text-transparent`}>{formatCurrency(plan.price)}</span><span className="text-gray-600 ml-2">₫/tháng</span></div>
                   <div className="space-y-4 mb-8">
-                    {plan.features && plan.features.map((feature, idx) => (
-                      <div key={idx} className="flex items-start gap-3"><svg className={`w-5 h-5 ${color.check} flex-shrink-0 mt-0.5`} fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg><div className="text-sm text-gray-700">{feature}</div></div>
-                    ))}
+                    {plan.features && Array.isArray(plan.features) && plan.features.length > 0 ? (
+                      plan.features.map((feature, idx) => (
+                        <div key={idx} className="flex items-start gap-3"><svg className={`w-5 h-5 ${color.check} flex-shrink-0 mt-0.5`} fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg><div className="text-sm text-gray-700">{feature}</div></div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-gray-400 italic">Chưa có tính năng nào</div>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => openEditModal(plan)} className={`flex-1 py-2 rounded-lg font-semibold transition-all duration-200 bg-gradient-to-r ${color.button} text-white shadow-lg hover:shadow-2xl hover:scale-105 hover:-translate-y-1`}>Chỉnh sửa</button>
@@ -330,11 +360,21 @@ const AdminPremiumPage = () => {
               <div><label className="block text-sm font-medium text-gray-700">Mô tả ngắn</label><input className="w-full mt-1 px-4 py-2 border rounded-lg" value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}/></div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="block text-sm font-medium text-gray-700">Giá (VNĐ)</label><input className="w-full mt-1 px-4 py-2 border rounded-lg" value={form.price} onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))} placeholder="VD: 799000" inputMode="numeric"/></div>
-                <div><label className="block text-sm font-medium text-gray-700">Màu icon (class)</label><input className="w-full mt-1 px-4 py-2 border rounded-lg" value={form.iconBg} onChange={(e) => setForm((prev) => ({ ...prev, iconBg: e.target.value }))} placeholder="VD: bg-pink-500"/></div>
+                <div><label className="block text-sm font-medium text-gray-700">Số lượng bài viết/tháng</label><input type="number" className="w-full mt-1 px-4 py-2 border rounded-lg" value={form.post_limit} onChange={(e) => setForm((prev) => ({ ...prev, post_limit: parseInt(e.target.value) || 10 }))} placeholder="VD: 10" min="1"/></div>
               </div>
+              <div><label className="block text-sm font-medium text-gray-700">Màu icon (class)</label><input className="w-full mt-1 px-4 py-2 border rounded-lg" value={form.iconBg} onChange={(e) => setForm((prev) => ({ ...prev, iconBg: e.target.value }))} placeholder="VD: bg-pink-500"/></div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Tính năng</label>
-                <div className="space-y-2">{form.features.map((f, idx) => (<div key={idx} className="flex gap-2"><input className="flex-1 px-3 py-2 border rounded-lg" value={f} onChange={(e) => handleFeatureChange(idx, e.target.value)} /><button type="button" onClick={() => removeFeatureInput(idx)} className="px-3 py-2 bg-red-50 text-red-600 rounded">X</button></div>))}</div>
+                <div className="space-y-2">
+                  {form.features && Array.isArray(form.features) ? (
+                    form.features.map((f, idx) => (
+                      <div key={idx} className="flex gap-2">
+                        <input className="flex-1 px-3 py-2 border rounded-lg" value={f} onChange={(e) => handleFeatureChange(idx, e.target.value)} />
+                        <button type="button" onClick={() => removeFeatureInput(idx)} className="px-3 py-2 bg-red-50 text-red-600 rounded">X</button>
+                      </div>
+                    ))
+                  ) : null}
+                </div>
                 <div className="mt-2"><button type="button" onClick={addFeatureInput} className="px-3 py-2 bg-gray-100 rounded">+ Thêm tính năng</button></div>
               </div>
               <div className="flex items-center gap-4"><label className="flex items-center gap-2"><input type="checkbox" checked={!!form.popular} onChange={(e) => setForm((prev) => ({ ...prev, popular: e.target.checked }))}/><span className="text-sm">Đánh dấu là "Phổ biến"</span></label></div>

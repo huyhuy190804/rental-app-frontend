@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { getCurrentUser } from "../utils/auth";
 import { addComment } from "../utils/posts";
+import { showSuccess, showWarning, showError } from "../utils/toast";
 
 const CommentModal = ({ isOpen, onClose, post, comments, onCommentSuccess }) => {
   const currentUser = getCurrentUser();
@@ -13,7 +14,7 @@ const CommentModal = ({ isOpen, onClose, post, comments, onCommentSuccess }) => 
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
     if (files.length + images.length > 3) {
-      alert("Tối đa 3 ảnh!");
+      showWarning("Tối đa 3 ảnh!");
       return;
     }
 
@@ -35,28 +36,28 @@ const CommentModal = ({ isOpen, onClose, post, comments, onCommentSuccess }) => 
     setImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!currentUser) {
-      alert("Vui lòng đăng nhập để bình luận!");
+      showWarning("Vui lòng đăng nhập để bình luận!");
       return;
     }
 
     if (!content.trim()) {
-      alert("Vui lòng nhập nội dung bình luận!");
+      showWarning("Vui lòng nhập nội dung bình luận!");
       return;
     }
 
-    const result = addComment(post.id, currentUser.id, currentUser.accountName, content, images);
+    const result = await addComment(post.id, currentUser.id, currentUser.accountName, content, images);
     
     if (result.success) {
       setContent("");
       setImages([]);
       onCommentSuccess();
-      alert("✅ Đã thêm bình luận!");
+      showSuccess("Đã thêm bình luận!");
     } else {
-      alert("❌ Có lỗi xảy ra!");
+      showError("Có lỗi xảy ra!");
     }
   };
 

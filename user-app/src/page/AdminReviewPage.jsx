@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import AdminLayout from "../admin_components/AdminLayout";
 import { getAllReviews, deleteReview, restoreReview } from "../utils/reviews";
+import { showSuccess } from "../utils/toast";
 
 const AdminReviewPage = () => {
   const [reviews, setReviews] = useState([]);
@@ -28,7 +29,7 @@ const AdminReviewPage = () => {
     if (window.confirm(`Xác nhận xóa vĩnh viễn bình luận của "${postTitle}"?`)) {
       const result = deleteReview(reviewId);
       if (result.success) {
-        alert("✅ Đã xóa bình luận!");
+        showSuccess("Đã xóa bình luận!");
         loadReviews();
       }
     }
@@ -38,7 +39,7 @@ const AdminReviewPage = () => {
     if (window.confirm("Khôi phục bình luận này?")) {
       const result = restoreReview(reviewId);
       if (result.success) {
-        alert("✅ Đã khôi phục bình luận!");
+        showSuccess("Đã khôi phục bình luận!");
         loadReviews();
       }
     }

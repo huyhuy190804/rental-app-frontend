@@ -2,6 +2,7 @@
   import React, { useState } from "react";
   import { registerUser } from "../utils/auth";
   import { addNotification } from "../utils/notifications";
+  import { showSuccess } from "../utils/toast";
 
   const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
     const [formData, setFormData] = useState({
@@ -142,7 +143,7 @@
           `Đã thêm thành viên mới "${formData.accountName.trim()}"`,
           { userId: result.user.id }
         );
-        alert("✅ Thêm thành viên thành công!");
+        showSuccess("Thêm thành viên thành công!");
         setFormData({
           accountName: "",
           email: "",

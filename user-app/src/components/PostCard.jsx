@@ -1,8 +1,18 @@
 //wrstudios-frontend/user-app/src/components/PostCard.jsx
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { formatCurrency } from "../utils/format";
 
 const PostCard = ({ post, onClick }) => {
+  const [imageError, setImageError] = useState(false);
+  const [imageSrc, setImageSrc] = useState(post.thumbnail || "https://via.placeholder.com/600x400");
+
+  // Update imageSrc when post.thumbnail changes
+  useEffect(() => {
+    if (post.thumbnail && !imageError) {
+      setImageSrc(post.thumbnail);
+    }
+  }, [post.thumbnail, imageError]);
+
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("vi-VN", {
@@ -10,6 +20,16 @@ const PostCard = ({ post, onClick }) => {
       month: "2-digit",
       year: "numeric"
     });
+  };
+
+  const handleImageError = (e) => {
+    if (!imageError) {
+      setImageError(true);
+      // Use data URI as fallback to avoid infinite loop
+      const fallbackImage = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='400'%3E%3Crect fill='%23f3f4f6' width='600' height='400'/%3E%3Ctext fill='%239ca3af' font-family='sans-serif' font-size='18' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E";
+      setImageSrc(fallbackImage);
+      e.target.src = fallbackImage;
+    }
   };
 
   const isSalePost = post.type === "sale";
@@ -23,16 +43,12 @@ const PostCard = ({ post, onClick }) => {
       onClick={onClick}
       className="bg-white rounded-3xl border border-gray-100 hover:border-pink-200 shadow-[0_20px_60px_rgba(15,23,42,0.05)] hover:shadow-[0_25px_65px_rgba(236,72,153,0.15)] transition-all duration-300 cursor-pointer flex flex-col lg:flex-row overflow-hidden"
     >
-      <div className="relative w-full lg:w-72 h-60 flex-shrink-0">
+      <div className="relative w-full lg:w-72 h-60 flex-shrink-0 bg-gray-100">
         <img
-          src={
-            post.thumbnail || "https://via.placeholder.com/600x400"
-          }
+          src={imageSrc}
           alt={post.title}
           className="w-full h-full object-cover"
-          onError={(e) => {
-            e.target.src = 'https://via.placeholder.com/600x400';
-          }}
+          onError={handleImageError}
         />
 
         {/* Hiển thị số lượng ảnh */}

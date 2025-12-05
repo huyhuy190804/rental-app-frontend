@@ -20,6 +20,18 @@ const MyArticleModal = ({ isOpen, onClose }) => {
     }
   }, [isOpen]);
 
+  // ✅ Listen for post creation event to refresh my posts
+  useEffect(() => {
+    const handlePostCreated = () => {
+      if (currentUser) {
+        loadMyPosts(currentUser);
+      }
+    };
+
+    window.addEventListener('postCreated', handlePostCreated);
+    return () => window.removeEventListener('postCreated', handlePostCreated);
+  }, [currentUser]);
+
   const loadMyPosts = async (user) => {
     if (!user) {
       setMyPosts([]);
@@ -59,6 +71,20 @@ const MyArticleModal = ({ isOpen, onClose }) => {
     }
   };
 
+  // Handle ESC key to close modal
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && !showDetailModal) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, showDetailModal, onClose]);
+
   if (!isOpen) return null;
 
   return (
@@ -66,10 +92,13 @@ const MyArticleModal = ({ isOpen, onClose }) => {
       <div
         className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
         onClick={(e) => {
-          if (e.target === e.currentTarget) {
+          if (e.target === e.currentTarget && !showDetailModal) {
             onClose();
           }
         }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="my-articles-title"
       >
         <div
           className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col relative overflow-hidden"
@@ -87,7 +116,8 @@ const MyArticleModal = ({ isOpen, onClose }) => {
               onClose();
             }}
             type="button"
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition z-10 bg-white rounded-full p-1 hover:bg-gray-100"
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition z-[100] bg-white rounded-full p-1 hover:bg-gray-100 shadow-lg cursor-pointer"
+            aria-label="Close modal"
           >
             <svg
               className="w-6 h-6"

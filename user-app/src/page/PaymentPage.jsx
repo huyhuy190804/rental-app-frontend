@@ -5,15 +5,17 @@ import PremiumIcon from "../components/PremiumIcon";
 import { getCurrentUser } from "../utils/auth";
 import { formatCurrency } from "../utils/format";
 // --- THÊM IMPORT NÀY ---
-import { addTransaction } from "../utils/transactions"; 
+import { transactionsAPI } from "../utils/api";
+import { showSuccess, showWarning, showInfo, showError } from "../utils/toast"; 
 import qrMBBank from "../assets/qr-mbbank.jpg";
 import qrPayPal from "../assets/qr-paypal.jpg";
+import MockPaymentGateway from "../components/MockPaymentGateway";
 
 const PaymentPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [currentUser, setCurrentUser] = useState(null);
-  const [selectedMethod, setSelectedMethod] = useState("bank");
+  const [selectedMethod, setSelectedMethod] = useState("test"); // Default to test payment
 
   const plan = location.state?.plan;
 
@@ -23,14 +25,14 @@ const PaymentPage = () => {
   useEffect(() => {
     const user = getCurrentUser();
     if (!user) {
-      alert("Vui lòng đăng nhập để tiếp tục!");
+      showWarning("Vui lòng đăng nhập để tiếp tục!");
       navigate("/");
       return;
     }
     setCurrentUser(user);
 
     if (!plan) {
-      alert("Vui lòng chọn gói Premium!");
+      showWarning("Vui lòng chọn gói Premium!");
       navigate("/premium");
     }
   }, [navigate, plan]);
@@ -61,30 +63,82 @@ const PaymentPage = () => {
   const transferContentBank = `Tai khoan ${currentUser.accountName} Nang cap goi ${plan.name} on WRStudios`;
   const transferContentPayPal = `${orderId} ${currentUser.accountName} ${plan.name}`;
 
-  const handleSubmitPayment = (e) => {
-    e.preventDefault();
-    
-    // --- BẮT ĐẦU LOGIC GỬI YÊU CẦU ---
+  // Handle mock payment gateway success
+  const handleMockPaymentSuccess = async (paymentData) => {
     const transactionPayload = {
-        userId: currentUser.id || currentUser.username,
-        userAccount: currentUser.accountName || currentUser.username,
-        method: selectedMethod === "bank" ? "MB Bank" : "PayPal",
+        userId: currentUser.user_id || currentUser.id || currentUser.username,
+        userAccount: currentUser.accountName || currentUser.name || currentUser.username,
+        method: `Card Payment (Test) - ****${paymentData.cardLast4}`,
         planName: plan.name,
-        amount: selectedMethod === "bank" ? total : parseFloat(totalUSD),
-        currency: selectedMethod === "bank" ? "VND" : "USD",
-        content: selectedMethod === "bank" ? transferContentBank : transferContentPayPal,
+        amount: total,
+        currency: "VND",
+        content: `CARD ${paymentData.transactionId} ${currentUser.accountName || currentUser.name} ${plan.name}`,
     };
     
-    addTransaction(transactionPayload);
-    // --- KẾT THÚC LOGIC ---
-
-    if (selectedMethod === "bank") {
-      alert("✅ Đã gửi yêu cầu thanh toán MB Bank! Vui lòng chờ Admin duyệt.");
-    } else {
-      alert(`✅ Đã gửi yêu cầu thanh toán PayPal! Vui lòng chờ Admin duyệt.`);
+    try {
+      const result = await transactionsAPI.create(transactionPayload);
+      
+      if (result.success) {
+        // Auto approve test payment
+        try {
+          await transactionsAPI.updateStatus(result.id, "approved");
+          showSuccess("✅ Thanh toán thành công! Gói Premium đã được kích hoạt.");
+          navigate("/premium");
+        } catch (approveError) {
+          console.error("Error auto-approving transaction:", approveError);
+          showSuccess("Đã tạo giao dịch thành công! Vui lòng chờ Admin duyệt.");
+          navigate("/premium");
+        }
+      } else {
+        showError(result.error || "Không thể tạo giao dịch. Vui lòng thử lại!");
+      }
+    } catch (error) {
+      console.error("Error creating transaction:", error);
+      showError("Lỗi kết nối server. Vui lòng thử lại sau!");
     }
+  };
+
+  const handleSubmitPayment = async (e) => {
+    e.preventDefault();
     
-    navigate("/premium");
+    // --- BẮT ĐẦU LOGIC GỬI YÊU CẦU LÊN BACKEND ---
+    const transactionPayload = {
+        userId: currentUser.user_id || currentUser.id || currentUser.username,
+        userAccount: currentUser.accountName || currentUser.name || currentUser.username,
+        method: selectedMethod === "bank" ? "MB Bank" : selectedMethod === "paypal" ? "PayPal" : "Test Payment",
+        planName: plan.name,
+        amount: selectedMethod === "bank" ? total : selectedMethod === "paypal" ? parseFloat(totalUSD) : total,
+        currency: selectedMethod === "bank" ? "VND" : selectedMethod === "paypal" ? "USD" : "VND",
+        content: selectedMethod === "bank" ? transferContentBank : selectedMethod === "paypal" ? transferContentPayPal : `TEST ${orderId} ${currentUser.accountName || currentUser.name} ${plan.name}`,
+    };
+    
+    try {
+      const result = await transactionsAPI.create(transactionPayload);
+      
+      if (result.success) {
+        // Nếu là test payment, tự động approve luôn
+        if (selectedMethod === "test") {
+          try {
+            await transactionsAPI.updateStatus(result.id, "approved");
+            showSuccess("✅ Thanh toán test thành công! Gói Premium đã được kích hoạt.");
+          } catch (approveError) {
+            console.error("Error auto-approving test transaction:", approveError);
+            showSuccess("Đã tạo giao dịch test thành công! Vui lòng chờ Admin duyệt.");
+          }
+        } else if (selectedMethod === "bank") {
+          showSuccess("Đã gửi yêu cầu thanh toán MB Bank! Vui lòng chờ Admin duyệt.");
+        } else {
+          showSuccess("Đã gửi yêu cầu thanh toán PayPal! Vui lòng chờ Admin duyệt.");
+        }
+        navigate("/premium");
+      } else {
+        showError(result.error || "Không thể tạo giao dịch. Vui lòng thử lại!");
+      }
+    } catch (error) {
+      console.error("Error creating transaction:", error);
+      showError("Lỗi kết nối server. Vui lòng thử lại sau!");
+    }
+    // --- KẾT THÚC LOGIC ---
   };
 
   // ... PHẦN RENDER BÊN DƯỚI GIỮ NGUYÊN KHÔNG ĐỔI ...
@@ -121,7 +175,7 @@ const PaymentPage = () => {
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Chọn phương thức thanh toán</h2>
 
-            <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="grid grid-cols-3 gap-3 mb-6">
               <button
                 onClick={() => setSelectedMethod("bank")}
                 className={`relative p-4 rounded-xl border-2 transition-all ${
@@ -168,9 +222,34 @@ const PaymentPage = () => {
                   <span className="text-sm font-semibold text-gray-900">PayPal</span>
                 </div>
               </button>
+
+              {/* Test Payment Button */}
+              <button
+                onClick={() => setSelectedMethod("test")}
+                className={`relative p-4 rounded-xl border-2 transition-all ${
+                  selectedMethod === "test" ? "border-green-500 bg-green-50" : "border-gray-200 hover:border-green-300"
+                }`}
+              >
+                {selectedMethod === "test" && (
+                  <div className="absolute top-2 right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <span className="text-sm font-semibold text-gray-900">Test Payment</span>
+                </div>
+              </button>
             </div>
 
-            {/* QR Code */}
+            {/* QR Code - Only show for bank/paypal */}
+            {selectedMethod !== "test" && (
             <div className="p-4 bg-gray-50 rounded-xl">
               <div className="text-center mb-3">
                 <h3 className="font-semibold text-gray-900 mb-1">Quét mã QR để chuyển khoản</h3>
@@ -243,14 +322,53 @@ const PaymentPage = () => {
                 )}
               </div>
             </div>
+            )}
+
+            {/* Test Payment Info */}
+            {selectedMethod === "test" && (
+              <div className="p-4 bg-green-50 rounded-xl border-2 border-green-200">
+                <div className="flex items-start gap-3 mb-4">
+                  <svg className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <h3 className="font-bold text-green-900 mb-1">Thanh toán Test (Mock Payment)</h3>
+                    <p className="text-sm text-green-700">
+                      Phương thức này dùng để test thanh toán ngay trên browser mà không cần chuyển khoản thật.
+                      Giao dịch sẽ được tự động duyệt ngay sau khi submit.
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-lg border border-green-200">
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Gói:</span>
+                      <span className="font-semibold text-gray-900">{plan.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Số tiền:</span>
+                      <span className="font-bold text-lg text-green-600">{formatCurrency(total)} ₫</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right: Payment Form */}
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Thông tin thanh toán</h2>
 
-            <form onSubmit={handleSubmitPayment} className="space-y-4">
-              {selectedMethod === "bank" ? (
+            {selectedMethod === "test" ? (
+              <MockPaymentGateway
+                amount={`${formatCurrency(total)} ₫`}
+                planName={plan.name}
+                onSuccess={handleMockPaymentSuccess}
+                onCancel={() => navigate("/premium")}
+              />
+            ) : (
+              <form onSubmit={handleSubmitPayment} className="space-y-4">
+                {selectedMethod === "bank" ? (
                 <>
                   {/* Bank Form */}
                   <div>
@@ -303,7 +421,7 @@ const PaymentPage = () => {
                         type="button"
                         onClick={() => {
                           navigator.clipboard.writeText(transferContentBank);
-                          alert("✅ Đã copy nội dung chuyển khoản!");
+                          showInfo("Đã copy nội dung chuyển khoản!");
                         }}
                         className="px-3 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition text-sm"
                       >
@@ -348,7 +466,7 @@ const PaymentPage = () => {
                         type="button"
                         onClick={() => {
                           navigator.clipboard.writeText(transferContentPayPal);
-                          alert("✅ Đã copy nội dung giao dịch!");
+                          showInfo("Đã copy nội dung giao dịch!");
                         }}
                         className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition text-sm"
                       >
@@ -368,14 +486,15 @@ const PaymentPage = () => {
                   </button>
                 </>
               )}
+              
+              <div className={`mt-4 p-4 rounded-lg ${selectedMethod === "bank" ? "bg-orange-50" : "bg-blue-50"}`}>
+                <p className="text-sm text-gray-700">
+                  Sau khi chuyển khoản thành công, vui lòng chờ <strong>5-10 phút</strong> để hệ thống xác nhận. 
+                  Chúng tôi sẽ gửi email xác nhận đến bạn.
+                </p>
+              </div>
             </form>
-
-            <div className={`mt-4 p-4 rounded-lg ${selectedMethod === "bank" ? "bg-orange-50" : "bg-blue-50"}`}>
-              <p className="text-sm text-gray-700">
-                Sau khi chuyển khoản thành công, vui lòng chờ <strong>5-10 phút</strong> để hệ thống xác nhận. 
-                Chúng tôi sẽ gửi email xác nhận đến bạn.
-              </p>
-            </div>
+            )}
           </div>
         </div>
 

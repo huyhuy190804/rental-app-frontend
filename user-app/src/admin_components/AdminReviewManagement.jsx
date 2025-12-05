@@ -1,6 +1,7 @@
 // wrstudios-frontend/user-app/src/admin_components/AdminReviewManagement.jsx
 import React, { useState, useEffect } from "react";
 import { getAllReviews, deleteReview, restoreReview } from "../utils/reviews";
+import { showSuccess } from "../utils/toast";
 
 const AdminReviewManagement = () => {
   const [reviews, setReviews] = useState([]);
@@ -24,7 +25,7 @@ const AdminReviewManagement = () => {
     if (window.confirm(`Xác nhận xóa vĩnh viễn bình luận của "${postTitle}"?`)) {
       const result = deleteReview(reviewId);
       if (result.success) {
-        alert("✅ Đã xóa bình luận!");
+        showSuccess("Đã xóa bình luận!");
         loadReviews();
       }
     }
@@ -34,7 +35,7 @@ const AdminReviewManagement = () => {
     if (window.confirm("Khôi phục bình luận này?")) {
       const result = restoreReview(reviewId);
       if (result.success) {
-        alert("✅ Đã khôi phục bình luận!");
+        showSuccess("Đã khôi phục bình luận!");
         loadReviews();
       }
     }

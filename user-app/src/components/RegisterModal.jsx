@@ -1,6 +1,7 @@
 //wrstudios-frontend/user-app/src/components/RegisterModal.jsx
 import React, { useState } from "react";
 import { registerUser } from "../utils/auth";
+import { showSuccess } from "../utils/toast";
 
 const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
   const [showPassword, setShowPassword] = useState(false);
@@ -122,7 +123,7 @@ const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
       });
 
       if (result.success) {
-        alert("✅ " + result.message);
+        showSuccess(result.message);
         // Reset form
         setFormData({
           accountName: "",

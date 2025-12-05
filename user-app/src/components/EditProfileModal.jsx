@@ -1,6 +1,7 @@
 // wrstudios-frontend/user-app/src/components/EditProfileModal.jsx
 import React, { useState } from "react";
 import { updateUserProfile } from "../utils/auth";
+import { showSuccess } from "../utils/toast";
 
 const EditProfileModal = ({
   isOpen,
@@ -112,7 +113,7 @@ const EditProfileModal = ({
     });
 
     if (result.success) {
-      alert("✅ " + result.message);
+      showSuccess(result.message);
       onUpdateSuccess();
     } else {
       setError(result.message);

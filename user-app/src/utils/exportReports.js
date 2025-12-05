@@ -4,6 +4,7 @@ import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
 import { getStatistics, getMonthlyBreakdown, getRevenueByPlan } from "./statistics";
 import { formatCurrency } from "./format";
+import { showError } from "./toast";
 
 /**
  * Export statistics to Word document (.docx)
@@ -164,7 +165,7 @@ export const exportToWord = async (filename = "Thong_ke_admin.docx") => {
     downloadFile(blob, filename, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
   } catch (error) {
     console.error("Lỗi export Word:", error);
-    alert("❌ Lỗi khi xuất file Word");
+    showError("Lỗi khi xuất file Word");
   }
 };
 
@@ -242,7 +243,7 @@ export const exportToPDF = (filename = "Thong_ke_admin.pdf") => {
     pdf.save(filename);
   } catch (error) {
     console.error("Lỗi export PDF:", error);
-    alert("❌ Lỗi khi xuất file PDF");
+    showError("Lỗi khi xuất file PDF");
   }
 };
 
@@ -310,7 +311,7 @@ export const exportToExcel = (filename = "Thong_ke_admin.xlsx") => {
     XLSX.writeFile(wb, filename);
   } catch (error) {
     console.error("Lỗi export Excel:", error);
-    alert("❌ Lỗi khi xuất file Excel");
+    showError("Lỗi khi xuất file Excel");
   }
 };
 

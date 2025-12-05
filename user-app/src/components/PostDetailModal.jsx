@@ -1,7 +1,10 @@
 // wrstudios-frontend/user-app/src/components/PostDetailModal.jsx - SIMPLIFIED & FIXED
 import React, { useState, useEffect } from "react";
-import { getPostById, getAllPostImages, incrementPostView } from "../utils/posts";
+import { getPostById, getAllPostImages, incrementPostView, getComments } from "../utils/posts";
 import { formatCurrency } from "../utils/format";
+import { showError } from "../utils/toast";
+import CommentModal from "./CommentModal";
+import { getCurrentUser } from "../utils/auth";
 
 const PostDetailModal = ({ isOpen, onClose, postId }) => {
   const [post, setPost] = useState(null);
@@ -9,6 +12,9 @@ const PostDetailModal = ({ isOpen, onClose, postId }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [imageLoading, setImageLoading] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const currentUser = getCurrentUser();
 
   useEffect(() => {
     if (!isOpen || !postId) {
@@ -31,7 +37,7 @@ const PostDetailModal = ({ isOpen, onClose, postId }) => {
 
       if (!postData) {
         console.error('❌ Post not found:', postId);
-        alert('Bài viết không tồn tại!');
+        showError('Bài viết không tồn tại!');
         onClose();
         return;
       }
@@ -43,13 +49,17 @@ const PostDetailModal = ({ isOpen, onClose, postId }) => {
       setImages(imagesData);
       setCurrentImageIndex(0);
 
+      // Load comments
+      const commentsData = await getComments(postId);
+      setComments(commentsData || []);
+
       // Increment view count
       if (postId) {
         incrementPostView(postId);
       }
     } catch (error) {
       console.error('❌ Error loading post:', error);
-      alert('Lỗi khi tải bài viết!');
+      showError('Lỗi khi tải bài viết!');
       onClose();
     } finally {
       setLoading(false);
@@ -150,8 +160,12 @@ const PostDetailModal = ({ isOpen, onClose, postId }) => {
                     imageLoading ? "opacity-50" : "opacity-100"
                   }`}
                   onError={(e) => {
-                    console.error('❌ Image load error');
-                    e.target.src = 'https://via.placeholder.com/800x600/FFB6C1/FFFFFF?text=Image+Error';
+                    // Prevent infinite loop by checking if already set to fallback
+                    if (!e.target.src.includes('data:image')) {
+                      console.error('❌ Image load error');
+                      const fallbackImage = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%23f3f4f6' width='800' height='600'/%3E%3Ctext fill='%239ca3af' font-family='sans-serif' font-size='24' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3EImage Error%3C/text%3E%3C/svg%3E";
+                      e.target.src = fallbackImage;
+                    }
                   }}
                 />
               ) : (
@@ -238,9 +252,89 @@ const PostDetailModal = ({ isOpen, onClose, postId }) => {
                 </div>
               </div>
             )}
+
+            {/* Comments Section */}
+            <div className="border-t border-gray-200 pt-4 mt-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Bình luận ({comments.length})
+                </h3>
+                {currentUser && (
+                  <button
+                    onClick={() => setShowCommentModal(true)}
+                    className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition text-sm font-medium"
+                  >
+                    Thêm bình luận
+                  </button>
+                )}
+              </div>
+
+              {/* Comments List */}
+              <div className="space-y-4 max-h-64 overflow-y-auto">
+                {comments.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8 text-sm">
+                    Chưa có bình luận nào. Hãy là người đầu tiên bình luận!
+                  </p>
+                ) : (
+                  comments.map((comment) => (
+                    <div key={comment.comment_id} className="flex gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                        {comment.user_name?.charAt(0).toUpperCase() || "?"}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="font-semibold text-sm text-gray-900">
+                            {comment.user_name || "Anonymous"}
+                          </p>
+                          {comment.rating && (
+                            <div className="flex items-center gap-1">
+                              {[...Array(5)].map((_, i) => (
+                                <svg
+                                  key={i}
+                                  className={`w-4 h-4 ${
+                                    i < comment.rating
+                                      ? "text-yellow-400 fill-current"
+                                      : "text-gray-300"
+                                  }`}
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                </svg>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-700 mb-1">{comment.content_comment}</p>
+                        <p className="text-xs text-gray-500">
+                          {formatDate(comment.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Comment Modal */}
+      {post && (
+        <CommentModal
+          isOpen={showCommentModal}
+          onClose={() => setShowCommentModal(false)}
+          post={{ id: post.post_id || postId }}
+          comments={comments}
+          onCommentSuccess={() => {
+            // Reload comments after adding new comment
+            getComments(postId).then((newComments) => {
+              setComments(newComments || []);
+            });
+            setShowCommentModal(false);
+          }}
+        />
+      )}
     </div>
   );
 };
