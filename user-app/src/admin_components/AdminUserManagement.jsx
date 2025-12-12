@@ -30,12 +30,20 @@ const AdminUserManagement = () => {
   const loadUsers = async () => {
     setLoading(true);
     try {
-      const data = await getAllUsers();
-      console.log("Loaded users:", data); // Debug
-      setUsers(data || []);
+      const result = await getAllUsers();
+      console.log("Loaded users:", result); // Debug
+
+      if (result?.success) {
+        setUsers(result.data || []);
+      } else {
+        setUsers([]);
+        const msg = result?.message || "Không thể tải danh sách người dùng";
+        showError(msg);
+      }
     } catch (error) {
       console.error("Error loading users:", error);
       setUsers([]);
+      showError(error?.message || "Không thể tải danh sách người dùng");
     } finally {
       setLoading(false);
     }

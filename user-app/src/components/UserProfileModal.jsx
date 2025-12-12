@@ -2,12 +2,14 @@
 // wrstudios-frontend/user-app/src/components/UserProfileModal.jsx
 import React, { useState, useEffect } from "react";
 import { getCurrentUser } from "../utils/auth";
+import { usersAPI } from "../utils/api";
 import EditProfileModal from "./EditProfileModal";
 
 const UserProfileModal = ({ isOpen, onClose }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [currentUser, setCurrentUser] = useState(getCurrentUser());
+  const [userPassword, setUserPassword] = useState("••••••••••");
 
   // Listen for global auth changes so the modal shows the correct user
   useEffect(() => {
@@ -18,17 +20,30 @@ const UserProfileModal = ({ isOpen, onClose }) => {
 
   // When modal opens, refresh current user in case auth changed while closed
   useEffect(() => {
-    if (isOpen) setCurrentUser(getCurrentUser());
+    if (isOpen) {
+      setCurrentUser(getCurrentUser());
+      fetchUserPassword();
+    }
   }, [isOpen]);
 
-  // Lấy password thật từ localStorage
-  const getUserPassword = () => {
+  // Lấy password từ database
+  const fetchUserPassword = async () => {
     try {
-      const users = JSON.parse(localStorage.getItem("wrstudios_users") || "[]");
-      const user = users.find((u) => u.id === currentUser?.id);
-      return user?.password || "••••••••••";
-    } catch {
-      return "••••••••••";
+      const user = getCurrentUser();
+      if (!user?.user_id) {
+        setUserPassword("••••••••••");
+        return;
+      }
+
+      const response = await usersAPI.getPassword(user.user_id);
+      if (response.success && response.password) {
+        setUserPassword(response.password);
+      } else {
+        setUserPassword("••••••••••");
+      }
+    } catch (error) {
+      console.error("Error fetching password:", error);
+      setUserPassword("••••••••••");
     }
   };
 
@@ -147,7 +162,7 @@ const UserProfileModal = ({ isOpen, onClose }) => {
                 </span>
                 <input
                   type="tel"
-                  value={currentUser.phoneNumber}
+                  value={currentUser.phone || currentUser.phoneNumber}
                   readOnly
                   className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-600"
                 />
@@ -177,7 +192,7 @@ const UserProfileModal = ({ isOpen, onClose }) => {
                 </span>
                 <input
                   type={showPassword ? "text" : "password"}
-                  value={showPassword ? getUserPassword() : "••••••••••"}
+                  value={showPassword ? userPassword : "••••••••••"}
                   readOnly
                   className="w-full pl-10 pr-12 py-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-600"
                 />

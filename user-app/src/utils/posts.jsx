@@ -1,11 +1,12 @@
 // wrstudios-frontend/user-app/src/utils/posts.jsx - FIXED
 import { postsAPI } from "./api";
 
-// ✅ THÊM: Import API_BASE_URL và getAuthHeader
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// ✅ Use same base URL as api.js (backend runs on 4000 by default)
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
 
+// ✅ Align token storage with auth.js/api.js
 const getAuthHeader = () => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('auth_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 

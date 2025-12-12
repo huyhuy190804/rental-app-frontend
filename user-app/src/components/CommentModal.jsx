@@ -10,6 +10,8 @@ const CommentModal = ({ isOpen, onClose, postId }) => {
   const [newComment, setNewComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
+  const [totalComments, setTotalComments] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(5);
   const currentUser = getCurrentUser();
 
   useEffect(() => {
@@ -52,9 +54,12 @@ const CommentModal = ({ isOpen, onClose, postId }) => {
       });
 
       setComments(rootComments);
+      setTotalComments(commentsData.length);
+      setVisibleCount(Math.min(5, rootComments.length || 5));
     } catch (error) {
       console.error("Error loading comments:", error);
       setComments([]);
+      setTotalComments(0);
     } finally {
       setLoading(false);
     }
@@ -231,7 +236,7 @@ const CommentModal = ({ isOpen, onClose, postId }) => {
             <div>
               <h2 className="text-xl font-bold text-gray-900">Bình luận</h2>
               <p className="text-sm text-gray-500">
-                {loading ? "Đang tải..." : `${comments.length} bình luận`}
+                {loading ? "Đang tải..." : `${totalComments} bình luận`}
               </p>
             </div>
           </div>
@@ -281,7 +286,19 @@ const CommentModal = ({ isOpen, onClose, postId }) => {
               </p>
             </div>
           ) : (
-            comments.map((comment) => renderComment(comment, 0))
+            <>
+              {comments.slice(0, visibleCount).map((comment) => renderComment(comment, 0))}
+              {visibleCount < comments.length && (
+                <div className="flex justify-center mt-2">
+                  <button
+                    onClick={() => setVisibleCount((prev) => Math.min(prev + 5, comments.length))}
+                    className="px-4 py-2 text-sm font-semibold text-blue-600 hover:text-blue-700"
+                  >
+                    Xem thêm
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
 

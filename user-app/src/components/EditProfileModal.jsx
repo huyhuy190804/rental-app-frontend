@@ -1,7 +1,8 @@
 // wrstudios-frontend/user-app/src/components/EditProfileModal.jsx
-import React, { useState } from "react";
-import { updateUserProfile } from "../utils/auth";
-import { showSuccess } from "../utils/toast";
+import React, { useState, useEffect } from "react";
+import { usersAPI } from "../utils/api";
+import { showSuccess, showError } from "../utils/toast";
+import { getCurrentUser } from "../utils/auth";
 
 const EditProfileModal = ({
   isOpen,
@@ -10,27 +11,55 @@ const EditProfileModal = ({
   currentUser,
 }) => {
   const [formData, setFormData] = useState({
-    accountName: currentUser?.accountName || "",
-    email: currentUser?.email || "",
-    phoneNumber: currentUser?.phoneNumber || "",
+    accountName: "",
+    email: "",
+    phone: "",
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Fetch user data from database when modal opens
+  useEffect(() => {
+    if (isOpen && currentUser?.user_id) {
+      fetchUserData();
+    }
+  }, [isOpen, currentUser]);
+
+  const fetchUserData = async () => {
+    try {
+      const response = await usersAPI.getById(currentUser.user_id);
+      if (response.success && response.data) {
+        setFormData({
+          accountName: response.data.name || "",
+          email: response.data.email || "",
+          phone: response.data.phone || "",
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    }
+  };
+
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
     // Validate required fields
-    if (!formData.accountName || !formData.email || !formData.phoneNumber) {
+    if (!formData.accountName || !formData.email || !formData.phone) {
       setError("Vui lòng điền đầy đủ thông tin!");
+      setLoading(false);
       return;
     }
 
@@ -51,9 +80,9 @@ const EditProfileModal = ({
       return null;
     };
 
-    const validatePhoneNumber = (phoneNumber) => {
+    const validatePhone = (phone) => {
       const phoneRegex = /^\d{10,11}$/;
-      if (!phoneRegex.test(phoneNumber)) {
+      if (!phoneRegex.test(phone)) {
         return "Số điện thoại phải có 10 hoặc 11 chữ số!";
       }
       return null;
@@ -73,16 +102,19 @@ const EditProfileModal = ({
     const accErr = validateAccountName(formData.accountName);
     if (accErr) {
       setError(accErr);
+      setLoading(false);
       return;
     }
     const emailErr = validateEmail(formData.email);
     if (emailErr) {
       setError(emailErr);
+      setLoading(false);
       return;
     }
-    const phoneErr = validatePhoneNumber(formData.phoneNumber);
+    const phoneErr = validatePhone(formData.phone);
     if (phoneErr) {
       setError(phoneErr);
+      setLoading(false);
       return;
     }
 
@@ -90,46 +122,71 @@ const EditProfileModal = ({
     if (formData.newPassword) {
       if (!formData.currentPassword) {
         setError("Vui lòng nhập mật khẩu hiện tại để đổi mật khẩu mới!");
+        setLoading(false);
         return;
       }
       if (formData.newPassword !== formData.confirmPassword) {
         setError("Mật khẩu mới không khớp!");
+        setLoading(false);
         return;
       }
       const pwdErr = validatePassword(formData.newPassword);
       if (pwdErr) {
         setError(pwdErr);
+        setLoading(false);
         return;
       }
     }
 
-    // Update profile
-    const result = updateUserProfile(currentUser.id, {
-      accountName: formData.accountName,
-      email: formData.email,
-      phoneNumber: formData.phoneNumber,
-      currentPassword: formData.currentPassword,
-      newPassword: formData.newPassword,
-    });
+    // Update profile via API
+    try {
+      const updateData = {
+        name: formData.accountName,
+        email: formData.email,
+        phone: formData.phone,
+      };
 
-    if (result.success) {
-      showSuccess(result.message);
-      onUpdateSuccess();
-    } else {
-      setError(result.message);
+      // Thêm password nếu có
+      if (formData.newPassword) {
+        updateData.currentPassword = formData.currentPassword;
+        updateData.newPassword = formData.newPassword;
+      }
+
+      const result = await usersAPI.updateProfile(currentUser.user_id, updateData);
+
+      if (result.success) {
+        showSuccess(result.message || "Cập nhật thông tin thành công!");
+        
+        // Update localStorage current user
+        if (result.user) {
+          const updatedUser = {
+            ...currentUser,
+            name: result.user.name,
+            email: result.user.email,
+            phone: result.user.phone,
+          };
+          localStorage.setItem("current_user", JSON.stringify(updatedUser));
+          window.dispatchEvent(new Event("authChange"));
+        }
+        
+        onUpdateSuccess();
+      } else {
+        setError(result.message || "Cập nhật thất bại!");
+        showError(result.message || "Cập nhật thất bại!");
+      }
+    } catch (error) {
+      console.error("Update error:", error);
+      setError(error.message || "Đã xảy ra lỗi khi cập nhật!");
+      showError(error.message || "Đã xảy ra lỗi khi cập nhật!");
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleClose = () => {
     setError("");
-    setFormData({
-      accountName: currentUser?.accountName || "",
-      email: currentUser?.email || "",
-      phoneNumber: currentUser?.phoneNumber || "",
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
+    setLoading(false);
+    // Reset form will happen on next open via useEffect
     onClose();
   };
 
@@ -262,9 +319,9 @@ const EditProfileModal = ({
               </span>
               <input
                 type="tel"
-                value={formData.phoneNumber}
+                value={formData.phone}
                 onChange={(e) =>
-                  setFormData({ ...formData, phoneNumber: e.target.value })
+                  setFormData({ ...formData, phone: e.target.value })
                 }
                 className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-pink-400 text-sm"
               />
@@ -276,80 +333,6 @@ const EditProfileModal = ({
           <p className="text-xs text-gray-500 mb-2">
             Leave password fields empty if you don't want to change password
           </p>
-
-          {/* Current Password */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Current Password
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                  />
-                </svg>
-              </span>
-              <input
-                type={showCurrentPassword ? "text" : "password"}
-                value={formData.currentPassword}
-                onChange={(e) =>
-                  setFormData({ ...formData, currentPassword: e.target.value })
-                }
-                placeholder="Enter current password"
-                className="w-full pl-10 pr-12 py-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-pink-400 text-sm"
-              />
-              <button
-                type="button"
-                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                {showCurrentPassword ? (
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                    />
-                  </svg>
-                ) : (
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                    />
-                  </svg>
-                )}
-              </button>
-            </div>
-          </div>
 
           {/* New Password */}
           <div>
@@ -510,9 +493,10 @@ const EditProfileModal = ({
             </button>
             <button
               type="submit"
-              className="flex-1 bg-gradient-to-r from-pink-500 to-red-500 text-white py-3 rounded-lg font-medium hover:from-pink-600 hover:to-red-600 transition shadow-lg"
+              disabled={loading}
+              className="flex-1 bg-gradient-to-r from-pink-500 to-red-500 text-white py-3 rounded-lg font-medium hover:from-pink-600 hover:to-red-600 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Update
+              {loading ? "Updating..." : "Update"}
             </button>
           </div>
         </form>

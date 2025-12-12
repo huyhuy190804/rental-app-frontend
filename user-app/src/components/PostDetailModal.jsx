@@ -5,6 +5,7 @@ import {
   getAllPostImages,
   incrementPostView,
   getComments,
+  addComment,
 } from "../utils/posts";
 import { formatCurrency } from "../utils/format";
 import { showError } from "../utils/toast";
@@ -17,8 +18,12 @@ const PostDetailModal = ({ isOpen, onClose, postId }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [imageLoading, setImageLoading] = useState(false);
-  const [comments, setComments] = useState([]);
-  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [comments, setComments] = useState([]); // tree structure
+  const [newComment, setNewComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [totalComments, setTotalComments] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(5);
+  const [replyTo, setReplyTo] = useState(null);
   const currentUser = getCurrentUser();
 
 useEffect(() => {
@@ -38,14 +43,22 @@ useEffect(() => {
 
         // ✅ FIX: Handle comments response correctly
         const commentsResponse = await getComments(postId);
-        console.log('📖 Comments response:', commentsResponse);
-        
+        console.log("📖 Comments response:", commentsResponse);
+
         if (commentsResponse?.success && Array.isArray(commentsResponse.data)) {
-          setComments(commentsResponse.data);
+          const tree = buildCommentTree(commentsResponse.data);
+          setComments(tree.rootComments);
+          setTotalComments(tree.total);
+          setVisibleCount(Math.min(5, tree.rootComments.length || 5));
         } else if (Array.isArray(commentsResponse)) {
-          setComments(commentsResponse);
+          const tree = buildCommentTree(commentsResponse);
+          setComments(tree.rootComments);
+          setTotalComments(tree.total);
+          setVisibleCount(Math.min(5, tree.rootComments.length || 5));
         } else {
           setComments([]);
+          setTotalComments(0);
+          setVisibleCount(5);
         }
       } catch (error) {
         console.error("Error loading post details:", error);
@@ -86,8 +99,22 @@ useEffect(() => {
       setCurrentImageIndex(0);
 
       // Load comments
-      const commentsData = await getComments(postId);
-      setComments(commentsData || []);
+      const commentsResponse = await getComments(postId);
+      if (commentsResponse?.success && Array.isArray(commentsResponse.data)) {
+        const tree = buildCommentTree(commentsResponse.data);
+        setComments(tree.rootComments);
+        setTotalComments(tree.total);
+        setVisibleCount(Math.min(5, tree.rootComments.length || 5));
+      } else if (Array.isArray(commentsResponse)) {
+        const tree = buildCommentTree(commentsResponse);
+        setComments(tree.rootComments);
+        setTotalComments(tree.total);
+        setVisibleCount(Math.min(5, tree.rootComments.length || 5));
+      } else {
+        setComments([]);
+        setTotalComments(0);
+        setVisibleCount(5);
+      }
 
       // Increment view count
       if (postId) {
@@ -127,6 +154,135 @@ useEffect(() => {
     return date.toLocaleDateString("vi-VN");
   };
 
+  const renderComment = (comment, depth = 0) => {
+    const authorName =
+      comment.user_name || comment.name || comment.user_email || "Ẩn danh";
+    const isOwner =
+      currentUser &&
+      (currentUser.user_id === comment.user_id ||
+        currentUser.id === comment.user_id);
+    const isReply = depth > 0;
+    const indentDepth = Math.min(depth, 1); // hạn chế thụt lề sâu để dễ đọc
+
+    return (
+      <div
+        key={comment.comment_id}
+        className={`${indentDepth > 0 ? "ml-6" : ""} ${isReply ? "pt-2" : ""}`}
+      >
+        <div
+          className={`flex gap-3 p-2.5 bg-white border ${
+            isReply ? "border-pink-100" : "border-gray-100"
+          } rounded-2xl shadow-sm relative`}
+        >
+          {isReply && (
+            <span className="absolute left-[-12px] top-4 h-full w-px bg-pink-200" aria-hidden />
+          )}
+          <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 uppercase">
+            {(authorName || "?").charAt(0)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <p className="font-semibold text-sm text-gray-900 truncate leading-tight">
+                {authorName}
+              </p>
+              {isOwner && (
+                <span className="px-2 py-0.5 bg-pink-100 text-pink-600 text-[11px] font-semibold rounded-full">
+                  Bạn
+                </span>
+              )}
+              <span className="text-[11px] text-gray-500">
+                {formatDate(comment.created_at)}
+              </span>
+            </div>
+            <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+              <p className="text-sm text-gray-800 leading-relaxed break-words">
+                {comment.content || comment.content_comment}
+              </p>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-gray-600 mt-2">
+              <button
+                onClick={() => handleReply(comment)}
+                className="font-semibold text-pink-600 hover:text-pink-700"
+              >
+                Phản hồi
+              </button>
+            </div>
+
+            {comment.replies && comment.replies.length > 0 && (
+              <div className="mt-3 space-y-3">
+                {comment.replies.map((child) => renderComment(child, indentDepth + 1))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const buildCommentTree = (flatComments) => {
+    const map = {};
+    const roots = [];
+    (flatComments || []).forEach((c) => {
+      map[c.comment_id] = { ...c, replies: [] };
+    });
+    (flatComments || []).forEach((c) => {
+      if (c.parent_comment_id && map[c.parent_comment_id]) {
+        map[c.parent_comment_id].replies.push(map[c.comment_id]);
+      } else {
+        roots.push(map[c.comment_id]);
+      }
+    });
+    return { rootComments: roots, total: flatComments?.length || 0 };
+  };
+
+  const handleReply = (comment) => {
+    setReplyTo(comment);
+  };
+
+  const cancelReply = () => {
+    setReplyTo(null);
+  };
+
+  const handleSubmitComment = async (e) => {
+    e.preventDefault();
+    if (!currentUser) {
+      showError("Vui lòng đăng nhập để bình luận");
+      return;
+    }
+    if (!newComment.trim()) {
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const result = await addComment(post.post_id || postId, {
+        content: newComment.trim(),
+        parent_comment_id: replyTo?.comment_id || null,
+      });
+      if (result?.success) {
+        setNewComment("");
+        setReplyTo(null);
+        const refreshed = await getComments(post.post_id || postId);
+        if (refreshed?.success && Array.isArray(refreshed.data)) {
+          const tree = buildCommentTree(refreshed.data);
+          setComments(tree.rootComments);
+          setTotalComments(tree.total);
+          setVisibleCount(Math.min(5, tree.rootComments.length || 5));
+        } else {
+          setComments([]);
+          setTotalComments(0);
+          setVisibleCount(5);
+        }
+      } else {
+        showError(result?.message || "Không thể thêm bình luận");
+      }
+    } catch (error) {
+      console.error("Add comment error:", error);
+      showError("Không thể thêm bình luận");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   // Loading state
@@ -149,7 +305,7 @@ useEffect(() => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
@@ -331,90 +487,93 @@ useEffect(() => {
 
             {/* Comments Section */}
             <div className="border-t border-gray-200 pt-4 mt-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Bình luận ({comments.length})
-                </h3>
-                {currentUser && (
-                  <button
-                    onClick={() => setShowCommentModal(true)}
-                    className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition text-sm font-medium"
-                  >
-                    Thêm bình luận
-                  </button>
-                )}
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Bình luận
+                  </h3>
+                  <p className="text-sm text-gray-500">{totalComments} bình luận</p>
+                </div>
               </div>
 
+              {/* Comment form */}
+              {currentUser ? (
+                <form
+                  onSubmit={handleSubmitComment}
+                  className="flex items-center gap-3 mb-4 bg-gray-50 border border-gray-200 rounded-2xl p-3"
+                >
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 uppercase">
+                    {currentUser.name?.charAt(0).toUpperCase() || "?"}
+                  </div>
+                  <div className="flex-1">
+                    {replyTo && (
+                      <div className="flex items-center justify-between mb-2 text-xs text-gray-600 bg-pink-50 border border-pink-100 rounded-lg px-3 py-1.5">
+                        <span>
+                          Đang phản hồi{" "}
+                          <strong>{replyTo.user_name || replyTo.name || "Ẩn danh"}</strong>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={cancelReply}
+                          className="text-pink-600 hover:text-pink-700 font-semibold"
+                        >
+                          Hủy
+                        </button>
+                      </div>
+                    )}
+                    <input
+                      type="text"
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      placeholder={replyTo ? "Viết phản hồi..." : "Viết bình luận..."}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent text-sm"
+                      disabled={submitting}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={submitting || !newComment.trim()}
+                    className="px-5 py-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-xl shadow hover:shadow-md hover:from-pink-600 hover:to-purple-700 transition text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? "Đang gửi..." : "Gửi"}
+                  </button>
+                </form>
+              ) : (
+                <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+                  Vui lòng đăng nhập để bình luận.
+                </div>
+              )}
+
               {/* Comments List */}
-              <div className="space-y-4 max-h-64 overflow-y-auto">
+              <div className="space-y-4">
                 {comments.length === 0 ? (
                   <p className="text-gray-500 text-center py-8 text-sm">
                     Chưa có bình luận nào. Hãy là người đầu tiên bình luận!
                   </p>
                 ) : (
-                  comments.map((comment) => (
-                    <div
-                      key={comment.comment_id}
-                      className="flex gap-3 p-3 bg-gray-50 rounded-lg"
-                    >
-                      <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
-                        {comment.user_name?.charAt(0).toUpperCase() || "?"}
+                  <>
+                    {comments.slice(0, visibleCount).map((comment) => renderComment(comment, 0))}
+                    {visibleCount < comments.length && (
+                      <div className="flex justify-center">
+                        <button
+                          onClick={() =>
+                            setVisibleCount((prev) =>
+                              Math.min(prev + 5, comments.length)
+                            )
+                          }
+                          className="text-sm font-semibold text-pink-600 hover:text-pink-700"
+                        >
+                          Xem thêm
+                        </button>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="font-semibold text-sm text-gray-900">
-                            {comment.user_name || "Anonymous"}
-                          </p>
-                          {comment.rating && (
-                            <div className="flex items-center gap-1">
-                              {[...Array(5)].map((_, i) => (
-                                <svg
-                                  key={i}
-                                  className={`w-4 h-4 ${
-                                    i < comment.rating
-                                      ? "text-yellow-400 fill-current"
-                                      : "text-gray-300"
-                                  }`}
-                                  fill="currentColor"
-                                  viewBox="0 0 20 20"
-                                >
-                                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                </svg>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-sm text-gray-700 mb-1">
-                          {comment.content_comment}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {formatDate(comment.created_at)}
-                        </p>
-                      </div>
-                    </div>
-                  ))
+                    )}
+                  </>
                 )}
               </div>
             </div>
           </div>
         </div>
       </div>
-
-
-      {/* Comment Modal */}
-{post && (
-  <CommentModal
-    isOpen={showCommentModal}
-    onClose={() => setShowCommentModal(false)}
-    postId={post.post_id || postId} // ✅ FIX: Truyền string, không phải object
-    onCommentSuccess={() => {
-      getComments(post.post_id || postId).then((newComments) => {
-        setComments(newComments.data || []);
-      });
-      setShowCommentModal(false);
-    }}
-  />
-)}
     </div>
   );
 };

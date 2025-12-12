@@ -1,8 +1,8 @@
   //wrstudios-frontend/user-app/src/admin_components/AddUserModal.jsx
   import React, { useState } from "react";
-  import { registerUser } from "../utils/auth";
-  import { addNotification } from "../utils/notifications";
-  import { showSuccess } from "../utils/toast";
+import { authAPI } from "../utils/api";
+import { addNotification } from "../utils/notifications";
+import { showSuccess, showError } from "../utils/toast";
 
   const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
     const [formData, setFormData] = useState({
@@ -129,37 +129,48 @@
         return;
       }
 
-      // Create user
-      const result = registerUser({
-        accountName: formData.accountName.trim(),
-        email: formData.email.trim(),
-        phoneNumber: formData.phoneNumber.trim(),
-        password: formData.password,
-      });
-
-      if (result.success) {
-        addNotification(
-          "user_added",
-          `Đã thêm thành viên mới "${formData.accountName.trim()}"`,
-          { userId: result.user.id }
+      try {
+        // Call register API directly to avoid overwriting admin token in localStorage
+        const result = await authAPI.register(
+          {
+            name: formData.accountName.trim(),
+            email: formData.email.trim(),
+            phone: formData.phoneNumber.trim(),
+            password: formData.password,
+          },
+          { skipAuthStore: true } // hint: ignored by backend but signals intention
         );
-        showSuccess("Thêm thành viên thành công!");
-        setFormData({
-          accountName: "",
-          email: "",
-          phoneNumber: "",
-          password: "",
-          confirmPassword: "",
-        });
-        if (onSuccess) {
-          onSuccess();
-        }
-        onClose();
-      } else {
-        setError(result.message);
-      }
 
-      setLoading(false);
+        if (result?.success) {
+          addNotification(
+            "user_added",
+            `Đã thêm thành viên mới "${formData.accountName.trim()}"`,
+            { userId: result.user?.id || result.user?.user_id }
+          );
+          showSuccess("Thêm thành viên thành công!");
+          setFormData({
+            accountName: "",
+            email: "",
+            phoneNumber: "",
+            password: "",
+            confirmPassword: "",
+          });
+          if (onSuccess) {
+            onSuccess();
+          }
+          onClose();
+        } else {
+          const msg = result?.message || "Thêm thành viên thất bại";
+          setError(msg);
+          showError(msg);
+        }
+      } catch (err) {
+        const msg = err?.message || "Thêm thành viên thất bại";
+        setError(msg);
+        showError(msg);
+      } finally {
+        setLoading(false);
+      }
     };
 
     if (!isOpen) return null;

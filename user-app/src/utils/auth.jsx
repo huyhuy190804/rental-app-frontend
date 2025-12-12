@@ -78,9 +78,9 @@ export const isAuthenticated = () => {
 export const getAllUsers = async () => {
   try {
     const result = await (await import("./api")).usersAPI.getAll();
-    return result.success ? result.data : [];
-  } catch {
-    return [];
+    return result;
+  } catch (error) {
+    return { success: false, message: error.message };
   }
 };
 

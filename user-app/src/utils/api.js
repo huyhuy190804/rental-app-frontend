@@ -63,6 +63,15 @@ export const usersAPI = {
     return res.json();
   },
 
+  updateProfile: async (id, data) => {
+    const res = await fetch(`${API_BASE_URL}/users/${id}/profile`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+
   delete: async (id) => {
     const res = await fetch(`${API_BASE_URL}/users/${id}`, {
       method: 'DELETE',
@@ -73,6 +82,13 @@ export const usersAPI = {
 
   getMembership: async (id) => {
     const res = await fetch(`${API_BASE_URL}/users/${id}/membership`, {
+      headers: { ...getAuthHeader() }
+    });
+    return res.json();
+  },
+
+  getPassword: async (id) => {
+    const res = await fetch(`${API_BASE_URL}/users/${id}/password`, {
       headers: { ...getAuthHeader() }
     });
     return res.json();
