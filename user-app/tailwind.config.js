@@ -1,4 +1,5 @@
 /** @type {import('tailwindcss').Config} */
+// wrstudios-frontend/user-app/tailwind.config.js
 export default {
   content: [
     "./index.html",

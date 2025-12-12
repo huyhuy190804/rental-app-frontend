@@ -1,4 +1,5 @@
 // Utility functions for toast notifications
+// wrstudios-frontend/user-app/src/utils/toast.js
 import { toast } from 'react-toastify';
 
 /**

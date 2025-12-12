@@ -1,5 +1,6 @@
 // Mock Payment Gateway - Simple test payment form
 // Can be easily replaced with Stripe/PayPal in production
+// wrstudios-frontend/user-app/src/components/MockPaymentGateway.jsx
 import React, { useState } from "react";
 import { showError, showSuccess } from "../utils/toast";
 

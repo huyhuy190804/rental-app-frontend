@@ -1,204 +1,382 @@
-// wrstudios-frontend/user-app/src/components/CommentModal.jsx
-import React, { useState } from "react";
+// wrstudios-frontend/user-app/src/components/CommentModal.jsx - USE CACHE
+import React, { useState, useEffect } from "react";
+import { getComments, addComment } from "../utils/posts";
 import { getCurrentUser } from "../utils/auth";
-import { addComment } from "../utils/posts";
-import { showSuccess, showWarning, showError } from "../utils/toast";
+import { showSuccess, showError, showWarning } from "../utils/toast";
 
-const CommentModal = ({ isOpen, onClose, post, comments, onCommentSuccess }) => {
+const CommentModal = ({ isOpen, onClose, postId }) => {
+  const [comments, setComments] = useState([]);
+  const [loading, setLoading] = useState(false); // ← Bắt đầu false thay vì true
+  const [newComment, setNewComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [replyTo, setReplyTo] = useState(null);
   const currentUser = getCurrentUser();
-  const [content, setContent] = useState("");
-  const [images, setImages] = useState([]);
 
-  if (!isOpen) return null;
-
-  const handleImageUpload = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length + images.length > 3) {
-      showWarning("Tối đa 3 ảnh!");
-      return;
+  useEffect(() => {
+    if (isOpen && postId) {
+      console.log("🔍 CommentModal opened with postId:", postId); // ← ADD
+      console.log("🔍 postId type:", typeof postId); // ← ADD
+      loadComments();
     }
+  }, [isOpen, postId]);
 
-    Promise.all(
-      files.map(file => {
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-      })
-    ).then(base64Images => {
-      setImages(prev => [...prev, ...base64Images]);
-    });
-  };
+  const loadComments = async () => {
+    try {
+      setLoading(true);
 
-  const removeImage = (index) => {
-    setImages(prev => prev.filter((_, i) => i !== index));
+      // ✅ FIX: Sử dụng cache, load ngay lập tức
+      const result = await getComments(postId);
+
+      const commentsData = result.data || [];
+
+      // Build comment tree (parent-child)
+      const commentMap = {};
+      const rootComments = [];
+
+      commentsData.forEach((comment) => {
+        commentMap[comment.comment_id] = {
+          ...comment,
+          replies: [],
+        };
+      });
+
+      commentsData.forEach((comment) => {
+        if (comment.parent_comment_id) {
+          const parent = commentMap[comment.parent_comment_id];
+          if (parent) {
+            parent.replies.push(commentMap[comment.comment_id]);
+          }
+        } else {
+          rootComments.push(commentMap[comment.comment_id]);
+        }
+      });
+
+      setComments(rootComments);
+    } catch (error) {
+      console.error("Error loading comments:", error);
+      setComments([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!currentUser) {
       showWarning("Vui lòng đăng nhập để bình luận!");
       return;
     }
 
-    if (!content.trim()) {
+    if (!newComment.trim()) {
       showWarning("Vui lòng nhập nội dung bình luận!");
       return;
     }
+    console.log("📝 Submitting comment..."); // ← ADD
+    console.log("📝 postId:", postId); // ← ADD
+    console.log("📝 content:", newComment.trim()); // ← ADD
+    console.log("📝 currentUser:", currentUser); // ← ADD
+    setSubmitting(true);
 
-    const result = await addComment(post.id, currentUser.id, currentUser.accountName, content, images);
-    
-    if (result.success) {
-      setContent("");
-      setImages([]);
-      onCommentSuccess();
-      showSuccess("Đã thêm bình luận!");
-    } else {
-      showError("Có lỗi xảy ra!");
+    try {
+      const result = await addComment(postId, {
+        content: newComment.trim(),
+        parent_comment_id: replyTo?.comment_id || null,
+      });
+      console.log("✅ Add comment result:", result); // ← ADD
+      if (result.success) {
+        showSuccess(replyTo ? "Đã phản hồi bình luận!" : "Đã thêm bình luận!");
+        setNewComment("");
+        setReplyTo(null);
+
+        // ✅ Reload để lấy comments mới nhất
+        await loadComments();
+      } else {
+        showError(result.message || "Lỗi khi thêm bình luận!");
+      }
+    } catch (error) {
+      console.error("Error adding comment:", error);
+      showError("Lỗi khi thêm bình luận!");
+    } finally {
+      setSubmitting(false);
     }
+  };
+
+  const handleReply = (comment) => {
+    setReplyTo(comment);
+    setNewComment("");
+  };
+
+  const cancelReply = () => {
+    setReplyTo(null);
+    setNewComment("");
   };
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diff = Math.floor((now - date) / 1000); // seconds
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diff < 60) return "vừa xong";
-    if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-    return date.toLocaleDateString('vi-VN');
+    if (diffMins < 1) return "Vừa xong";
+    if (diffMins < 60) return `${diffMins} phút trước`;
+    if (diffHours < 24) return `${diffHours} giờ trước`;
+    if (diffDays < 7) return `${diffDays} ngày trước`;
+
+    return date.toLocaleDateString("vi-VN");
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-bold text-white">💬 Bình luận</h3>
-              <p className="text-blue-100 text-sm mt-1">{comments.length} bình luận</p>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-white hover:bg-white/20 p-2 rounded-full transition"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+  const getInitial = (name) => {
+    if (!name || typeof name !== "string" || name.trim() === "") {
+      return "?";
+    }
+    return name.trim().charAt(0).toUpperCase();
+  };
+
+  const renderComment = (comment, depth = 0) => {
+    const authorName =
+      comment.authorName || comment.user_name || comment.name || "Unknown User";
+    const isOwner =
+      currentUser &&
+      (currentUser.user_id === comment.user_id ||
+        currentUser.id === comment.user_id);
+
+    return (
+      <div
+        key={comment.comment_id}
+        className={`${depth > 0 ? "ml-12 mt-4" : ""}`}
+      >
+        <div className="flex gap-3">
+          <div
+            className={`w-10 h-10 rounded-full bg-gradient-to-br ${
+              isOwner
+                ? "from-pink-500 to-purple-500"
+                : "from-blue-500 to-cyan-500"
+            } flex items-center justify-center text-white font-bold flex-shrink-0`}
+          >
+            {getInitial(authorName)}
           </div>
+
+          <div className="flex-1">
+            <div className="bg-gray-100 rounded-2xl px-4 py-3">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="font-semibold text-gray-900 text-sm">
+                  {authorName}
+                </p>
+                {isOwner && (
+                  <span className="px-2 py-0.5 bg-pink-100 text-pink-600 text-xs font-semibold rounded-full">
+                    Bạn
+                  </span>
+                )}
+              </div>
+              <p className="text-gray-700 text-sm leading-relaxed">
+                {comment.content}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-4 mt-2 px-2">
+              <span className="text-xs text-gray-500">
+                {formatDate(comment.created_at)}
+              </span>
+              <button
+                onClick={() => handleReply(comment)}
+                className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition"
+              >
+                Phản hồi
+              </button>
+            </div>
+
+            {comment.replies && comment.replies.length > 0 && (
+              <div className="mt-3 space-y-3">
+                {comment.replies.map((reply) =>
+                  renderComment(reply, depth + 1)
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="bg-gradient-to-br from-blue-500 to-purple-500 p-2 rounded-lg">
+              <svg
+                className="w-6 h-6 text-white"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Bình luận</h2>
+              <p className="text-sm text-gray-500">
+                {loading ? "Đang tải..." : `${comments.length} bình luận`}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition"
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
         </div>
 
         {/* Comments List */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {comments.length === 0 ? (
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent"></div>
+            </div>
+          ) : comments.length === 0 ? (
             <div className="text-center py-12">
-              <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              <svg
+                className="w-16 h-16 text-gray-300 mx-auto mb-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                />
               </svg>
-              <p className="text-gray-500">Chưa có bình luận nào. Hãy là người đầu tiên!</p>
+              <p className="text-gray-500 text-sm">
+                Chưa có bình luận nào. Hãy là người đầu tiên!
+              </p>
             </div>
           ) : (
-            comments.map((comment) => (
-              <div key={comment.id} className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
-                    {comment.userName.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="font-semibold text-gray-900">{comment.userName}</span>
-                      <span className="text-xs text-gray-500">• {formatDate(comment.createdAt)}</span>
-                    </div>
-                    <p className="text-gray-700 text-sm mb-2 whitespace-pre-wrap">{comment.content}</p>
-                    
-                    {/* Comment Images */}
-                    {comment.images && comment.images.length > 0 && (
-                      <div className="flex gap-2 mt-3">
-                        {comment.images.map((img, idx) => (
-                          <img
-                            key={idx}
-                            src={img}
-                            alt={`Comment ${idx + 1}`}
-                            className="w-20 h-20 object-cover rounded-lg border border-gray-300"
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))
+            comments.map((comment) => renderComment(comment, 0))
           )}
         </div>
 
-        {/* Comment Form */}
-        <form onSubmit={handleSubmit} className="border-t border-gray-200 p-6 bg-gray-50">
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Viết bình luận của bạn..."
-            rows={3}
-            className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none"
-          />
-
-          {/* Image Preview */}
-          {images.length > 0 && (
-            <div className="flex gap-2 mt-3">
-              {images.map((img, idx) => (
-                <div key={idx} className="relative group">
-                  <img
-                    src={img}
-                    alt={`Upload ${idx + 1}`}
-                    className="w-20 h-20 object-cover rounded-lg border border-gray-300"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(idx)}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
+        {/* Comment Input */}
+        {currentUser ? (
+          <form
+            onSubmit={handleSubmit}
+            className="border-t border-gray-200 p-4"
+          >
+            {replyTo && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg
+                    className="w-4 h-4 text-blue-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
+                    />
+                  </svg>
+                  <span className="text-sm text-blue-700">
+                    Đang phản hồi{" "}
+                    <span className="font-semibold">
+                      {replyTo.authorName ||
+                        replyTo.user_name ||
+                        "Unknown User"}
+                    </span>
+                  </span>
                 </div>
-              ))}
+                <button
+                  type="button"
+                  onClick={cancelReply}
+                  className="text-blue-600 hover:text-blue-700"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center text-white font-bold flex-shrink-0">
+                {getInitial(currentUser.name || currentUser.email)}
+              </div>
+
+              <div className="flex-1 flex gap-2">
+                <input
+                  type="text"
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder={
+                    replyTo ? "Viết phản hồi..." : "Viết bình luận..."
+                  }
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-full focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  disabled={submitting}
+                />
+                <button
+                  type="submit"
+                  disabled={submitting || !newComment.trim()}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-full hover:from-blue-600 hover:to-purple-600 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                >
+                  {submitting ? "Đang gửi..." : "Gửi"}
+                </button>
+              </div>
             </div>
-          )}
-
-          <div className="flex items-center gap-3 mt-3">
-            {/* Upload Image Button */}
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleImageUpload}
-              className="hidden"
-              id="comment-image-upload"
-            />
-            <label
-              htmlFor="comment-image-upload"
-              className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition cursor-pointer"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <span className="text-sm font-medium">Ảnh</span>
-            </label>
-
-            {/* Submit Button */}
+          </form>
+        ) : (
+          <div className="border-t border-gray-200 p-6 text-center">
+            <p className="text-gray-600 mb-4">
+              Vui lòng đăng nhập để bình luận
+            </p>
             <button
-              type="submit"
-              className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white py-2 px-6 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition shadow-lg"
+              onClick={onClose}
+              className="px-6 py-2 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-full hover:from-pink-600 hover:to-purple-600 transition font-semibold"
             >
-              Gửi bình luận
+              Đóng
             </button>
           </div>
-        </form>
+        )}
       </div>
     </div>
   );

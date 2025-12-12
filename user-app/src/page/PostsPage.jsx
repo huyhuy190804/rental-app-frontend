@@ -52,8 +52,8 @@ const PostsPage = () => {
       loadPosts();
     };
 
-    window.addEventListener('postCreated', handlePostCreated);
-    return () => window.removeEventListener('postCreated', handlePostCreated);
+    window.addEventListener("postCreated", handlePostCreated);
+    return () => window.removeEventListener("postCreated", handlePostCreated);
   }, []);
 
   const loadPosts = () => {
@@ -61,9 +61,9 @@ const PostsPage = () => {
     setTimeout(() => {
       (async () => {
         try {
-          console.log('🔄 Loading posts...');
+          console.log("🔄 Loading posts...");
           const all = await getAllPosts(1, 1000); // Get more posts
-          console.log('📦 Received posts:', all?.length || 0);
+          console.log("📦 Received posts:", all?.length || 0);
 
           // Map backend fields to frontend fields
           const mappedPosts = (all || []).map((p) => ({
@@ -79,12 +79,12 @@ const PostsPage = () => {
             thumbnail: p.thumbnail || null, // Ensure thumbnail is mapped from backend
           }));
 
-          console.log('✅ Mapped posts:', mappedPosts.length);
+          console.log("✅ Mapped posts:", mappedPosts.length);
           const approved = mappedPosts
             .filter((p) => p.status === "approved")
             .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-          
-          console.log('✅ Approved posts:', approved.length);
+
+          console.log("✅ Approved posts:", approved.length);
 
           setAllApprovedPosts(approved);
 
@@ -154,13 +154,17 @@ const PostsPage = () => {
 
   const categoryCounts = useMemo(() => {
     const articles = allApprovedPosts.filter(
-      (p) => p.type === "article"
+      (p) => p.type === "article" || p.post_type === "article"
     ).length;
-    const sale = allApprovedPosts.filter((p) => p.type === "sale").length;
+
+    const listings = allApprovedPosts.filter(
+      (p) => p.type === "listing" || p.post_type === "listing"
+    ).length;
+
     return {
       all: allApprovedPosts.length,
       article: articles,
-      sale,
+      sale: listings, // ← Fix: đếm đúng listings
     };
   }, [allApprovedPosts]);
 
@@ -444,11 +448,14 @@ const PostsPage = () => {
                       className="flex items-center gap-3 w-full text-left"
                     >
                       <img
-                        src={post.thumbnail || "https://via.placeholder.com/160x140"}
+                        src={
+                          post.thumbnail ||
+                          "https://via.placeholder.com/160x140"
+                        }
                         alt={post.title}
                         className="w-16 h-14 rounded-2xl object-cover"
                         onError={(e) => {
-                          e.target.src = 'https://via.placeholder.com/160x140';
+                          e.target.src = "https://via.placeholder.com/160x140";
                         }}
                       />
                       <div className="flex-1">

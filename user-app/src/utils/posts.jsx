@@ -1,5 +1,16 @@
-// wrstudios-frontend/user-app/src/utils/posts.jsx - sử dụng API backend
+// wrstudios-frontend/user-app/src/utils/posts.jsx - FIXED
 import { postsAPI } from "./api";
+
+// ✅ THÊM: Import API_BASE_URL và getAuthHeader
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+const getAuthHeader = () => {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+// ✅ THÊM: Comments cache
+let commentsCache = {};
 
 // Lấy tất cả bài viết từ backend
 export const getAllPosts = async (page = 1, limit = 1000) => {
@@ -40,7 +51,7 @@ export const getPostImageByIndex = async (postId, index) => {
   try {
     const result = await postsAPI.getImageByIndex(postId, index);
     if (result.success) {
-      return result.data.img_url; // Trả về chuỗi base64
+      return result.data.img_url;
     }
     return null;
   } catch (error) {
@@ -109,7 +120,6 @@ export const deletePost = async (postId) => {
     }
     return { success: false, message: result.message };
   } catch (error) {
-    // Nếu bài viết không tồn tại (404), vẫn trả về success để frontend có thể xóa khỏi state
     if (error.message && error.message.includes('404')) {
       return { success: true, deleted: true, message: 'Bài viết đã được xóa khỏi database' };
     }
@@ -121,59 +131,74 @@ export const deletePost = async (postId) => {
 // COMMENTS
 // ============================================
 
-// Thêm comment
-export const addComment = async (
-  postId,
-  userId,
-  userName,
-  content,
-  images = []
-) => {
+// ✅ FIX: Thêm comment với API đúng
+export const addComment = async (postId, commentData) => {
   try {
-    const { commentsAPI } = await import("./api");
-    const result = await commentsAPI.create({
-      post_id: postId,
-      content_comment: content,
-      rating: null,
+    const res = await fetch(`${API_BASE_URL}/posts/${postId}/comments`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader()
+      },
+      body: JSON.stringify(commentData)
     });
-
-    if (result.success) {
-      return {
-        success: true,
-        comment: { id: result.comment_id, content_comment: content },
-      };
+    
+    const data = await res.json();
+    
+    if (data.success) {
+      // Invalidate cache
+      delete commentsCache[postId];
     }
-    return { success: false };
+    
+    return data;
   } catch (error) {
-    return { success: false };
+    console.error('❌ Error adding comment:', error);
+    return { success: false, error: error.message };
   }
 };
 
 // Lấy comments của bài viết
 export const getComments = async (postId) => {
   try {
-    console.log('🔄 Loading comments for post:', postId);
-    const { commentsAPI } = await import("./api");
-    const result = await commentsAPI.getByPostId(postId);
-    console.log('📦 Comments result:', result);
-    if (result.success) {
-      console.log(`✅ Loaded ${result.data?.length || 0} comments`);
-      return result.data || [];
+    console.log('📖 Fetching comments for postId:', postId);
+
+    // Check cache first
+    if (commentsCache[postId]) {
+      console.log(`📦 Comments loaded from cache for ${postId}`);
+      return { success: true, data: commentsCache[postId] };
     }
-    console.warn('⚠️ Failed to load comments:', result);
-    return [];
+
+    const res = await fetch(`${API_BASE_URL}/posts/${postId}/comments`, {
+      headers: getAuthHeader()
+    });
+    const data = await res.json();
+    
+    console.log('✅ Comments response:', data);
+    
+    if (data.success) {
+      commentsCache[postId] = data.data || [];
+    }
+    
+    return data;
   } catch (error) {
-    console.error('❌ Error loading comments:', error);
-    return [];
+    console.error('❌ Error fetching comments:', error);
+    return { success: false, data: [] };
   }
 };
 
 // Tăng lượt xem bài viết
-export const incrementPostView = async (postId, userId) => {
+export const incrementPostView = async (postId) => {
   try {
-    // Backend tự động tăng views khi GET post
-    return { success: true, views: 0 };
+    const res = await fetch(`${API_BASE_URL}/posts/${postId}/increment-view`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    const data = await res.json();
+    return data;
   } catch (error) {
+    console.error('❌ Error incrementing view:', error);
     return { success: false };
   }
 };
@@ -188,26 +213,17 @@ export const toggleLikePost = async (postId, userId) => {
   }
 };
 
-// Rating bài viết (sử dụng comment với rating)
+// Rating bài viết
 export const ratePost = async (postId, userId, rating) => {
   try {
-    const { commentsAPI } = await import("./api");
-    const result = await commentsAPI.create({
-      post_id: postId,
-      content_comment: `Rating: ${rating}`,
-      rating: rating,
-    });
-
-    if (result.success) {
-      return { success: true, averageRating: rating };
-    }
+    // TODO: Implement rating API
     return { success: false };
   } catch (error) {
     return { success: false };
   }
 };
 
-// Duyệt bài viết (cho admin) - Cập nhật status thành 'approved'
+// Duyệt bài viết (cho admin)
 export const approvePost = async (postId) => {
   try {
     const result = await postsAPI.approve(postId);
@@ -223,7 +239,7 @@ export const approvePost = async (postId) => {
   }
 };
 
-// Từ chối bài viết (cho admin) - Cập nhật status thành 'rejected'
+// Từ chối bài viết (cho admin)
 export const rejectPost = async (postId) => {
   try {
     const result = await postsAPI.reject(postId);
@@ -238,3 +254,8 @@ export const rejectPost = async (postId) => {
     return { success: false, message: error.message };
   }
 };
+
+// Clear comments cache
+export const clearCommentsCache = () => {
+  commentsCache = {};
+};  

@@ -1,4 +1,4 @@
-// wrstudios-frontend/user-app/src/page/SearchPage.jsx  
+// wrstudios-frontend/user-app/src/page/SearchPage.jsx - FIXED
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
@@ -42,26 +42,43 @@ const SearchPage = () => {
   const performSearch = async (searchTerm) => {
     setLoading(true);
     try {
-      // Debounce-like delay to avoid janky UI
+      // ✅ FIX 1: Load 1000 posts giống PostsPage
       await new Promise((r) => setTimeout(r, 300));
-      const allPosts = await getAllPosts();
-      const approved = (allPosts || [])
+      const all = await getAllPosts(1, 1000); // ← THÊM 1000 ở đây
+      
+      console.log('🔍 Search: Loaded posts:', all?.length || 0);
+
+      // ✅ FIX 2: Map backend fields đúng giống PostsPage
+      const mappedPosts = (all || []).map((p) => ({
+        ...p,
+        id: p.post_id || p.id,
+        type: p.post_type || "listing",
+        createdAt: p.created_at || p.createdAt,
+        authorName: p.author_name || p.authorName || "Unknown",
+        authorId: p.user_id || p.authorId,
+        location: p.address || p.location,
+        content: p.description,
+        images: p.images || [],
+        thumbnail: p.thumbnail || null,
+      }));
+
+      console.log('✅ Mapped posts:', mappedPosts.length);
+
+      // ✅ FIX 3: Filter approved posts
+      const approved = mappedPosts
         .filter((p) => p.status === "approved")
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
+      console.log('✅ Approved posts:', approved.length);
+
+      // Search filtering
       const searchLower = searchTerm.toLowerCase();
       const filtered = approved.filter((post) => {
         const titleMatch = post.title?.toLowerCase().includes(searchLower);
-        const descriptionMatch = post.description
-          ?.toLowerCase()
-          .includes(searchLower);
+        const descriptionMatch = post.description?.toLowerCase().includes(searchLower);
         const contentMatch = post.content?.toLowerCase().includes(searchLower);
-        const locationMatch = post.location
-          ?.toLowerCase()
-          .includes(searchLower);
-        const categoryMatch = post.category
-          ?.toLowerCase()
-          .includes(searchLower);
+        const locationMatch = post.location?.toLowerCase().includes(searchLower);
+        const categoryMatch = post.category?.toLowerCase().includes(searchLower);
 
         return (
           titleMatch ||
@@ -72,9 +89,10 @@ const SearchPage = () => {
         );
       });
 
+      console.log(`✅ Filtered results for "${searchTerm}":`, filtered.length);
       setPosts(filtered);
     } catch (error) {
-      console.error("Search error:", error);
+      console.error("❌ Search error:", error);
       setPosts([]);
     } finally {
       setLoading(false);
@@ -82,6 +100,7 @@ const SearchPage = () => {
   };
 
   const handleCardClick = (postId) => {
+    console.log('🔍 Opening post detail:', postId);
     setSelectedPostId(postId);
     setShowDetailModal(true);
   };
@@ -98,7 +117,6 @@ const SearchPage = () => {
   const handleLogout = () => {
     logoutUser();
     setCurrentUser(null);
-    // ✅ Redirect to home page after logout
     navigate("/");
   };
 

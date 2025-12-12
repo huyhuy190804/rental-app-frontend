@@ -1,4 +1,4 @@
-//wrstudios-frontend/user-app/src/components/MyArticleModal.jsx
+// wrstudios-frontend/user-app/src/components/MyArticleModal.jsx - FIXED FAST LOAD
 import React, { useState, useEffect } from "react";
 import { getAllPosts } from "../utils/posts";
 import { getCurrentUser } from "../utils/auth";
@@ -20,7 +20,6 @@ const MyArticleModal = ({ isOpen, onClose }) => {
     }
   }, [isOpen]);
 
-  // ✅ Listen for post creation event to refresh my posts
   useEffect(() => {
     const handlePostCreated = () => {
       if (currentUser) {
@@ -28,8 +27,8 @@ const MyArticleModal = ({ isOpen, onClose }) => {
       }
     };
 
-    window.addEventListener('postCreated', handlePostCreated);
-    return () => window.removeEventListener('postCreated', handlePostCreated);
+    window.addEventListener("postCreated", handlePostCreated);
+    return () => window.removeEventListener("postCreated", handlePostCreated);
   }, [currentUser]);
 
   const loadMyPosts = async (user) => {
@@ -41,9 +40,25 @@ const MyArticleModal = ({ isOpen, onClose }) => {
 
     setLoading(true);
     try {
+      // ✅ FIX: Load 1000 posts giống PostsPage & SearchPage
       await new Promise((r) => setTimeout(r, 300));
-      const allPosts = await getAllPosts();
-      const userPosts = (allPosts || [])
+      const all = await getAllPosts(1, 1000); // ← THÊM 1000
+
+      // ✅ FIX: Map backend fields
+      const mappedPosts = (all || []).map((p) => ({
+        ...p,
+        id: p.post_id || p.id,
+        type: p.post_type || "listing",
+        createdAt: p.created_at || p.createdAt,
+        authorName: p.author_name || p.authorName || "Unknown",
+        authorId: p.user_id || p.authorId,
+        location: p.address || p.location,
+        content: p.description,
+        images: p.images || [],
+        thumbnail: p.thumbnail || null,
+      }));
+
+      const userPosts = mappedPosts
         .filter(
           (post) => post.authorId === user.user_id || post.authorId === user.id
         )
@@ -71,18 +86,21 @@ const MyArticleModal = ({ isOpen, onClose }) => {
     }
   };
 
-  // Handle ESC key to close modal
+  const handlePostDeleted = (postId) => {
+    setMyPosts((prev) => prev.filter((p) => p.id !== postId));
+  };
+
   useEffect(() => {
     if (!isOpen) return;
-    
+
     const handleEscape = (e) => {
-      if (e.key === 'Escape' && !showDetailModal) {
+      if (e.key === "Escape" && !showDetailModal) {
         onClose();
       }
     };
 
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
   }, [isOpen, showDetailModal, onClose]);
 
   if (!isOpen) return null;
@@ -107,7 +125,6 @@ const MyArticleModal = ({ isOpen, onClose }) => {
           {/* Decorative Circle */}
           <div className="absolute -top-16 -left-16 w-32 h-32 bg-pink-200 rounded-full opacity-50"></div>
           <div className="absolute -bottom-16 -right-16 w-32 h-32 bg-pink-200 rounded-full opacity-50"></div>
-
           {/* Close Button */}
           <button
             onClick={(e) => {
@@ -132,8 +149,7 @@ const MyArticleModal = ({ isOpen, onClose }) => {
                 d="M6 18L18 6M6 6l12 12"
               />
             </svg>
-          </button>
-
+          </button>{" "}
           {/* Header */}
           <div className="text-center mb-6 relative z-10 pt-8 px-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-2">
@@ -141,7 +157,6 @@ const MyArticleModal = ({ isOpen, onClose }) => {
             </h2>
             <p className="text-sm text-gray-600">Danh sách bài viết của bạn</p>
           </div>
-
           {/* Content */}
           <div className="flex-1 overflow-y-auto px-8 pb-8 relative z-10">
             {loading ? (
@@ -171,12 +186,13 @@ const MyArticleModal = ({ isOpen, onClose }) => {
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-6">
                 {myPosts.map((post) => (
                   <PostCard
                     key={post.id}
                     post={post}
                     onClick={() => handleCardClick(post.id)}
+                    onPostDeleted={handlePostDeleted}
                   />
                 ))}
               </div>
@@ -194,5 +210,4 @@ const MyArticleModal = ({ isOpen, onClose }) => {
     </>
   );
 };
-
 export default MyArticleModal;
