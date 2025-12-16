@@ -124,9 +124,14 @@ const CreatePostModal = ({ isOpen, onClose, onSuccess }) => {
     console.log("🔍 postType:", postType);
 
     try {
-      const token = localStorage.getItem("token");
-      
-      // ✅ Thay 5000 bằng port backend của bạn (check terminal backend)
+      // Use the same key as the global auth utilities
+      const token = localStorage.getItem("auth_token");
+
+      if (!token) {
+        setError("Vui lòng đăng nhập trước khi đăng bài!");
+        return;
+      }
+
       const response = await fetch("http://localhost:4000/api/posts", {
         method: "POST",
         headers: {

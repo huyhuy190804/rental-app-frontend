@@ -10,7 +10,8 @@ import { getCurrentUser, logoutUser } from "../utils/auth";
 import { getAllPosts } from "../utils/posts";
 
 const HomePage = () => {
-  const [activeFilter, setActiveFilter] = useState("all");
+  // Default to 'studio' which matches DB category
+  const [activeFilter, setActiveFilter] = useState("studio");
   const [currentUser, setCurrentUser] = useState(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [studios, setStudios] = useState([]);
@@ -21,6 +22,16 @@ const HomePage = () => {
   useEffect(() => {
     setCurrentUser(getCurrentUser());
     loadStudios();
+  }, []);
+
+  // Reload list when a new post is created anywhere in the app
+  useEffect(() => {
+    const handlePostCreated = () => {
+      loadStudios();
+    };
+
+    window.addEventListener("postCreated", handlePostCreated);
+    return () => window.removeEventListener("postCreated", handlePostCreated);
   }, []);
 
   // ✅ MAP CATEGORY TỪ DATABASE → FRONTEND
@@ -101,24 +112,9 @@ const HomePage = () => {
     setSelectedPostId(null);
   };
 
-  // ✅ FILTER THEO CATEGORY
+  // ✅ FILTER BY EXACT CATEGORY: studio / 1bedroom / 2bedroom / hotel
   const filteredStudios = studios
-    .filter((studio) => {
-      if (activeFilter === "all") return true;
-      
-      // Map filter ID → DB category
-      const categoryMap = {
-        'all': null,
-        '1room': '1bedroom',
-        '2room': '2bedroom',
-        'hotel': 'hotel'
-      };
-      
-      const targetCategory = categoryMap[activeFilter];
-      if (!targetCategory) return studio.category === 'studio';
-      
-      return studio.category === targetCategory;
-    })
+    .filter((studio) => studio.category === activeFilter)
     .slice(0, 4);
 
   return (

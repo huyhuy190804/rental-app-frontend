@@ -85,13 +85,20 @@ const PostCard = ({ post, onClick, onPostDeleted }) => {
 
     if (isRating) return;
 
+    // Use the same auth token key as the rest of the app
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      showWarning("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại để đánh giá!");
+      return;
+    }
+
     setIsRating(true);
     try {
       const response = await fetch(`http://localhost:4000/api/posts/${post.post_id}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
           content: `Đánh giá ${starValue} sao`,

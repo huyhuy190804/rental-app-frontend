@@ -4,7 +4,8 @@ import React from "react";
 const FilterTabs = ({ activeFilter, onFilterChange }) => {
   const filters = [
     {
-      id: "all",
+      // Match DB category: 'studio'
+      id: "studio",
       label: "Studio",
       icon: (
         <svg
@@ -29,7 +30,8 @@ const FilterTabs = ({ activeFilter, onFilterChange }) => {
       ),
     },
     {
-      id: "1room",
+      // Match DB category: '1bedroom'
+      id: "1bedroom",
       label: "1 Phòng ngủ",
       icon: (
         <svg
@@ -54,7 +56,8 @@ const FilterTabs = ({ activeFilter, onFilterChange }) => {
       ),
     },
     {
-      id: "2room",
+      // Match DB category: '2bedroom'
+      id: "2bedroom",
       label: "2 Phòng ngủ",
       icon: (
         <svg
@@ -79,6 +82,7 @@ const FilterTabs = ({ activeFilter, onFilterChange }) => {
       ),
     },
     {
+      // Match DB category: 'hotel'
       id: "hotel",
       label: "Phòng khách sạn",
       icon: (
