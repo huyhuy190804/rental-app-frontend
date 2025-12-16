@@ -1,4 +1,4 @@
-// wrstudios-frontend/user-app/src/components/PostCard.jsx - ADD ACTIONS
+// wrstudios-frontend/user-app/src/components/PostCard.jsx - WITH CLICKABLE STARS
 import React, { useState, useEffect } from "react";
 import { formatCurrency } from "../utils/format";
 import defaultPostImage from "../assets/default-post-image.jpg";
@@ -6,10 +6,13 @@ import { getCurrentUser } from "../utils/auth";
 import { deletePost } from "../utils/posts";
 import { showSuccess, showError, showWarning } from "../utils/toast";
 import ReportScamModal from "./ReportScamModal";
+
 const PostCard = ({ post, onClick, onPostDeleted }) => {
   const [imageError, setImageError] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [hoverRating, setHoverRating] = useState(0); // ← THÊM: Hover state
+  const [isRating, setIsRating] = useState(false); // ← THÊM: Loading state
   const currentUser = getCurrentUser();
   
   const [imageSrc, setImageSrc] = useState(
@@ -42,7 +45,6 @@ const PostCard = ({ post, onClick, onPostDeleted }) => {
 
   const handleEdit = (e) => {
     e.stopPropagation();
-    // TODO: Open EditPostModal
     showWarning("Chức năng chỉnh sửa đang phát triển!");
   };
 
@@ -72,9 +74,56 @@ const PostCard = ({ post, onClick, onPostDeleted }) => {
     setShowReportModal(true);
   };
 
+  // ✅ XỬ LÝ CLICK SAO ĐỂ ĐÁNH GIÁ
+  const handleStarClick = async (e, starValue) => {
+    e.stopPropagation(); // Ngăn mở PostDetailModal
+
+    if (!currentUser) {
+      showWarning("Vui lòng đăng nhập để đánh giá!");
+      return;
+    }
+
+    if (isRating) return;
+
+    setIsRating(true);
+    try {
+      const response = await fetch(`http://localhost:4000/api/posts/${post.post_id}/comments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          content: `Đánh giá ${starValue} sao`,
+          rating: starValue
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        showSuccess(`Đã đánh giá ${starValue} sao!`);
+        // Reload trang để cập nhật rating
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        showError(result.message || 'Không thể đánh giá!');
+      }
+    } catch (error) {
+      console.error('Error rating:', error);
+      showError('Lỗi khi đánh giá!');
+    } finally {
+      setIsRating(false);
+    }
+  };
+
   const isSalePost = post.type === "listing" || post.post_type === "listing";
   const priceLabel = isSalePost && post.price ? `${formatCurrency(post.price)}` : null;
-  const ratingValue = Number(post.averageRating || 0);
+  
+  // ✅ LẤY RATING TỪ POST DATA
+  const averageRating = parseFloat(post.average_rating || post.averageRating || 0);
+  const totalReviews = parseInt(post.total_reviews || post.total_ratings || 0);
 
   return (
     <>
@@ -96,12 +145,10 @@ const PostCard = ({ post, onClick, onPostDeleted }) => {
             </svg>
           </button>
 
-          {/* Actions Dropdown */}
           {showActions && (
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-2xl border border-gray-200 py-2 z-20">
               {isOwner ? (
                 <>
-                  {/* Edit */}
                   <button
                     onClick={handleEdit}
                     className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700"
@@ -111,7 +158,6 @@ const PostCard = ({ post, onClick, onPostDeleted }) => {
                     </svg>
                     Chỉnh sửa
                   </button>
-                  {/* Delete */}
                   <button
                     onClick={handleDelete}
                     className="w-full px-4 py-2 text-left hover:bg-red-50 flex items-center gap-3 text-sm text-red-600"
@@ -123,18 +169,15 @@ const PostCard = ({ post, onClick, onPostDeleted }) => {
                   </button>
                 </>
               ) : (
-                <>
-                  {/* Report Scam */}
-                  <button
-                    onClick={handleReport}
-                    className="w-full px-4 py-2 text-left hover:bg-orange-50 flex items-center gap-3 text-sm text-orange-600"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    Báo cáo lừa đảo
-                  </button>
-                </>
+                <button
+                  onClick={handleReport}
+                  className="w-full px-4 py-2 text-left hover:bg-orange-50 flex items-center gap-3 text-sm text-orange-600"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  Báo cáo lừa đảo
+                </button>
               )}
             </div>
           )}
@@ -202,33 +245,72 @@ const PostCard = ({ post, onClick, onPostDeleted }) => {
             {isSalePost && post.area && (
               <div>
                 <p className="text-xs text-gray-500">Diện tích</p>
-                <p className="text-sm font-bold text-gray-900">{post.area} m²</p>
+                <p className="text-sm font-bold text-gray-900">{post.area} m2</p>
               </div>
             )}
 
-            <div className="flex items-center gap-1">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <svg
-                  key={star}
-                  className={`w-4 h-4 ${star <= Math.round(ratingValue) ? "text-yellow-400" : "text-gray-300"}`}
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-              ))}
-              <span className="text-xs font-semibold text-gray-700 ml-1">
-                {ratingValue.toFixed(1)}
-              </span>
-            </div>
+            {/* ✅ SAO CLICKABLE CHỈ CHO LISTING */}
+            {isSalePost ? (
+              <div 
+                className="flex items-center gap-2"
+                onMouseLeave={() => setHoverRating(0)}
+              >
+                {/* Stars - CLICKABLE */}
+                <div className="flex items-center gap-0.5">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={(e) => handleStarClick(e, star)}
+                      onMouseEnter={() => setHoverRating(star)}
+                      disabled={isRating}
+                      className="transition-transform hover:scale-125 cursor-pointer disabled:cursor-wait focus:outline-none"
+                      title={`Đánh giá ${star} sao`}
+                    >
+                      <svg
+                        className={`w-5 h-5 ${
+                          star <= (hoverRating || Math.round(averageRating))
+                            ? "text-yellow-400"
+                            : "text-gray-300"
+                        } transition-colors`}
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                    </button>
+                  ))}
+                </div>
 
-            <div className="flex items-center gap-1 text-gray-500">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              <span className="text-xs font-medium">{post.views || 0}</span>
-            </div>
+                {/* Rating số */}
+                <div className="flex items-center gap-1 text-sm">
+                  <span className="font-semibold text-gray-700">
+                    {averageRating.toFixed(1)}
+                  </span>
+                  {totalReviews > 0 && (
+                    <span className="text-gray-500">
+                      ({totalReviews})
+                    </span>
+                  )}
+                </div>
+
+                {/* Loading spinner */}
+                {isRating && (
+                  <div className="ml-1">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-pink-500 border-t-transparent"></div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Article - Chỉ hiển thị lượt xem */
+              <div className="flex items-center gap-1 text-gray-500">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <span className="text-xs font-medium">{post.views || 0}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>

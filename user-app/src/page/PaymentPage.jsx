@@ -32,7 +32,7 @@ const PaymentPage = () => {
     setCurrentUser(user);
 
     if (!plan) {
-      showWarning("Vui lòng chọn gói Premium!");
+      showWarning("Vui lòng chọn gói Membership!");
       navigate("/premium");
     }
   }, [navigate, plan]);
@@ -82,7 +82,7 @@ const PaymentPage = () => {
         // Auto approve test payment
         try {
           await transactionsAPI.updateStatus(result.id, "approved");
-          showSuccess("✅ Thanh toán thành công! Gói Premium đã được kích hoạt.");
+          showSuccess("✅ Thanh toán thành công! Gói Membership đã được kích hoạt.");
           navigate("/premium");
         } catch (approveError) {
           console.error("Error auto-approving transaction:", approveError);

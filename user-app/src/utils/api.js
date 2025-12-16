@@ -152,6 +152,14 @@ export const postsAPI = {
     return res.json();
   },
 
+  restore: async (id) => {
+    const res = await fetch(`${API_BASE_URL}/posts/${id}/restore`, {
+      method: 'PATCH',
+      headers: { ...getAuthHeader() }
+    });
+    return res.json();
+  },
+
   delete: async (id) => {
     const res = await fetch(`${API_BASE_URL}/posts/${id}`, {
       method: 'DELETE',

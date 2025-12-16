@@ -1,7 +1,6 @@
 // wrstudios-frontend/user-app/src/components/CreatePostModal.jsx
 import React, { useState } from "react";
 import { getCurrentUser } from "../utils/auth";
-import { createPost } from "../utils/posts";
 import { showSuccess, showWarning, showError } from "../utils/toast";
 
 const CreatePostModal = ({ isOpen, onClose, onSuccess }) => {
@@ -12,7 +11,7 @@ const CreatePostModal = ({ isOpen, onClose, onSuccess }) => {
     price: "",
     area: "",
     location: "",
-    category: "Studio",
+    category: "studio",
     content: "",
     images: [],
   });
@@ -105,28 +104,43 @@ const CreatePostModal = ({ isOpen, onClose, onSuccess }) => {
         setError("Vui lòng nhập nội dung bài viết!");
         return;
       }
-      // Articles can have 0 images (optional)
     }
 
-    // Create post using backend API
+    // ✅ GỌI API TRỰC TIẾP - KHÔNG QUA utils/posts.js
     const postData = {
       title: formData.title,
-      description:
-        activeTab === "article" ? formData.content : formData.description,
+      description: activeTab === "article" ? formData.content : formData.description,
       address: formData.location || null,
       price: normalizedPrice || null,
       area: normalizedArea || null,
       images: formData.images,
       post_type: postType,
+      category: postType === "listing" ? formData.category : null,
     };
 
+    console.log("🔍 postData gửi lên backend:", postData);
+    console.log("🔍 formData.category hiện tại:", formData.category);
+    console.log("🔍 activeTab:", activeTab);
+    console.log("🔍 postType:", postType);
+
     try {
-      const result = await createPost(postData);
+      const token = localStorage.getItem("token");
+      
+      // ✅ Thay 5000 bằng port backend của bạn (check terminal backend)
+      const response = await fetch("http://localhost:4000/api/posts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(postData),
+      });
+
+      const result = await response.json();
 
       if (result.success) {
         showSuccess("Đăng bài thành công!");
         onSuccess();
-        // ✅ Dispatch event to refresh membership status
         window.dispatchEvent(new Event("postCreated"));
         window.dispatchEvent(new Event("membershipChanged"));
         handleClose();
@@ -134,6 +148,7 @@ const CreatePostModal = ({ isOpen, onClose, onSuccess }) => {
         setError(result.message || "Lỗi khi đăng bài");
       }
     } catch (error) {
+      console.error("❌ Lỗi khi đăng bài:", error);
       setError("Lỗi: " + error.message);
     }
   };
@@ -145,7 +160,7 @@ const CreatePostModal = ({ isOpen, onClose, onSuccess }) => {
       price: "",
       area: "",
       location: "",
-      category: "Studio",
+      category: "studio",
       content: "",
       images: [],
     });
@@ -308,7 +323,7 @@ const CreatePostModal = ({ isOpen, onClose, onSuccess }) => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Loại hình
+                    Loại hình *
                   </label>
                   <select
                     value={formData.category}
@@ -317,10 +332,10 @@ const CreatePostModal = ({ isOpen, onClose, onSuccess }) => {
                     }
                     className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
                   >
-                    <option value="Studio">Studio</option>
-                    <option value="1 Phòng ngủ">1 Phòng ngủ</option>
-                    <option value="2 Phòng ngủ">2 Phòng ngủ</option>
-                    <option value="Phòng khách sạn">Phòng khách sạn</option>
+                    <option value="studio">Studio</option>
+                    <option value="1bedroom">1 Phòng ngủ</option>
+                    <option value="2bedroom">2 Phòng ngủ</option>
+                    <option value="hotel">Phòng khách sạn</option>
                   </select>
                 </div>
               </div>

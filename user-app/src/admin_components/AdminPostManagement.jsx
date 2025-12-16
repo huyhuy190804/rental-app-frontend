@@ -4,6 +4,7 @@ import {
   getAllPosts,
   rejectPost, // ← Giữ reject
   deletePost, // ← Giữ delete
+  restorePost,
 } from "../utils/posts";
 import PostDetailModal from "../components/PostDetailModal";
 import { showSuccess, showError, showWarning } from "../utils/toast";
@@ -63,6 +64,22 @@ const AdminPostManagement = () => {
         }
       } catch (error) {
         showError("Lỗi khi từ chối bài viết!");
+      }
+    }
+  };
+
+  const handleRestore = async (postId, postTitle) => {
+    if (window.confirm(`Xác nhận khôi phục bài viết: "${postTitle}"?`)) {
+      try {
+        const result = await restorePost(postId);
+        if (result.success) {
+          showSuccess("Đã khôi phục bài viết!");
+          loadPosts();
+        } else {
+          showError(result.message || "Lỗi khi khôi phục bài viết!");
+        }
+      } catch (error) {
+        showError("Lỗi khi khôi phục bài viết!");
       }
     }
   };
@@ -304,6 +321,41 @@ const AdminPostManagement = () => {
                                 strokeWidth={2}
                                 d="M6 18L18 6M6 6l12 12"
                               />
+                            </svg>
+                          </button>
+                        )}
+
+                        {/* Khôi phục - chỉ hiện nếu status = rejected */}
+                        {post.status === "rejected" && (
+                          <button
+                            onClick={() => handleRestore(post.id, post.title)}
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
+                            title="Khôi phục"
+                          >
+                            <svg
+                              className="w-5 h-5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 4v5h5"
+                              ></path>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M20 20v-5h-5"
+                              ></path>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M9 4.5A7.5 7.5 0 0112 3a7.5 7.5 0 017.5 7.5c0 4.14-3.36 7.5-7.5 7.5A7.5 7.5 0 014.5 12"
+                              ></path>
                             </svg>
                           </button>
                         )}

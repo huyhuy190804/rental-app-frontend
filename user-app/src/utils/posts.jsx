@@ -256,6 +256,22 @@ export const rejectPost = async (postId) => {
   }
 };
 
+// Khôi phục bài viết (cho admin)
+export const restorePost = async (postId) => {
+  try {
+    const result = await postsAPI.restore(postId);
+    if (result.success) {
+      return { success: true, message: "Post restored" };
+    }
+    return {
+      success: false,
+      message: result.message || "Failed to restore post",
+    };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+};
+
 // Clear comments cache
 export const clearCommentsCache = () => {
   commentsCache = {};

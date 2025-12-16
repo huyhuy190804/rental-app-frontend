@@ -1,5 +1,5 @@
 // wrstudios-frontend/user-app/src/components/CommentModal.jsx - USE CACHE
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { getComments, addComment } from "../utils/posts";
 import { getCurrentUser } from "../utils/auth";
 import { showSuccess, showError, showWarning } from "../utils/toast";
@@ -20,9 +20,9 @@ const CommentModal = ({ isOpen, onClose, postId }) => {
       console.log("🔍 postId type:", typeof postId); // ← ADD
       loadComments();
     }
-  }, [isOpen, postId]);
+  }, [isOpen, postId, loadComments]);
 
-  const loadComments = async () => {
+  const loadComments = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -63,7 +63,7 @@ const CommentModal = ({ isOpen, onClose, postId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [postId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

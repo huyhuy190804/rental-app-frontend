@@ -1,4 +1,4 @@
-// wrstudios-frontend/user-app/src/page/HomePage.jsx - FIXED với real data
+// wrstudios-frontend/user-app/src/page/HomePage.jsx - FIXED
 import React, { useState, useEffect } from "react";
 import Header from "../components/Header";
 import Hero from "../components/Hero";
@@ -23,26 +23,50 @@ const HomePage = () => {
     loadStudios();
   }, []);
 
-  // ✅ Load real data từ database
+  // ✅ MAP CATEGORY TỪ DATABASE → FRONTEND
+  const mapCategory = (dbCategory) => {
+    const mapping = {
+      'studio': 'Studio',
+      '1bedroom': '1 Phòng ngủ',
+      '2bedroom': '2 Phòng ngủ',
+      'hotel': 'Phòng khách sạn'
+    };
+    return mapping[dbCategory] || 'Studio';
+  };
+
+  // ✅ LOAD REAL DATA VỚI CATEGORY ĐÚNG
   const loadStudios = async () => {
     try {
       setLoading(true);
-      const allPosts = await getAllPosts(1, 100); // Load 100 posts đầu tiên
+      const allPosts = await getAllPosts(1, 100);
       
-      // Map backend data sang format StudioCard
+      console.log('📦 Raw posts from API:', allPosts?.length || 0);
+      
+      // ✅ MAP ĐÚNG CATEGORY (CHỈ LISTING)
       const mappedStudios = (allPosts || [])
         .filter((p) => p.status === "approved" && p.post_type === "listing")
-        .map((p) => ({
-          id: p.post_id || p.id,
-          name: p.title,
-          description: p.description,
-          location: p.address || "TP. HCM",
-          price: p.price || 0,
-          area: p.area || 0,
-          type: "Studio", // Hoặc map từ category nếu có
-          image: p.thumbnail || "https://images.unsplash.com/photo-1648775933902-f633de370964?w=600",
-        }))
+        .map((p) => {
+          console.log(`📍 Post ${p.post_id}: category="${p.category}"`);
+          return {
+            id: p.post_id || p.id,
+            name: p.title,
+            description: p.description,
+            location: p.address || "TP. HCM",
+            price: p.price || 0,
+            area: p.area || 0,
+            type: mapCategory(p.category), // ← FIX: Dùng category từ DB
+            image: p.thumbnail || "https://images.unsplash.com/photo-1648775933902-f633de370964?w=600",
+            category: p.category, // ← Giữ raw category để filter
+          };
+        })
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      console.log('✅ Mapped studios by category:', {
+        studio: mappedStudios.filter(s => s.category === 'studio').length,
+        '1bedroom': mappedStudios.filter(s => s.category === '1bedroom').length,
+        '2bedroom': mappedStudios.filter(s => s.category === '2bedroom').length,
+        hotel: mappedStudios.filter(s => s.category === 'hotel').length,
+      });
 
       setStudios(mappedStudios);
     } catch (error) {
@@ -77,14 +101,23 @@ const HomePage = () => {
     setSelectedPostId(null);
   };
 
-  // Filter studios theo activeFilter
+  // ✅ FILTER THEO CATEGORY
   const filteredStudios = studios
     .filter((studio) => {
-      if (activeFilter === "all") return studio.type === "Studio";
-      if (activeFilter === "1room") return studio.type === "1 Phòng ngủ";
-      if (activeFilter === "2room") return studio.type === "2 Phòng ngủ";
-      if (activeFilter === "hotel") return studio.type === "Phòng khách sạn";
-      return true;
+      if (activeFilter === "all") return true;
+      
+      // Map filter ID → DB category
+      const categoryMap = {
+        'all': null,
+        '1room': '1bedroom',
+        '2room': '2bedroom',
+        'hotel': 'hotel'
+      };
+      
+      const targetCategory = categoryMap[activeFilter];
+      if (!targetCategory) return studio.category === 'studio';
+      
+      return studio.category === targetCategory;
     })
     .slice(0, 4);
 
